@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <!-- Inherit Form View to Modify it -->
+    <record id="inherit_crm_stage_form" model="ir.ui.view">
+        <field name="name">inherit_crm_stage_form</field>
+        <field name="model">crm.stage</field>
+        <field name="inherit_id" ref="crm.crm_stage_form"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//field[@name='color']" position="after">
+                <field name="mobikey_stage_type"/>
+            </xpath>
+
+        </field>
+    </record>
+</odoo>

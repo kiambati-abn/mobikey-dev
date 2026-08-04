@@ -1,0 +1,13 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_crm_product_lines,crm_product_lines,model_crm_product_lines,base.group_user,1,1,1,1
+access_sale_order_margin_warning,sale.order margin warning,model_sale_order,base.group_user,1,1,1,0
+access_mobikey_vehicle_type_user,mobikey.vehicle.type user,model_mobikey_vehicle_type,base.group_user,1,1,1,0
+access_mobikey_vehicle_type_manager,mobikey.vehicle.type manager,model_mobikey_vehicle_type,base.group_system,1,1,1,1
+access_mobikey_intended_use_user,mobikey.intended.use user,model_mobikey_intended_use,base.group_user,1,1,1,0
+access_mobikey_intended_use_manager,mobikey.intended.use manager,model_mobikey_intended_use,base.group_system,1,1,1,1
+access_mobikey_budget_range_user,mobikey.budget.range user,model_mobikey_budget_range,base.group_user,1,1,1,0
+access_mobikey_budget_range_manager,mobikey.budget.range manager,model_mobikey_budget_range,base.group_system,1,1,1,1
+access_mobikey_customer_type_user,mobikey.customer.type user,model_mobikey_customer_type,base.group_user,1,1,1,0
+access_mobikey_customer_type_manager,mobikey.customer.type manager,model_mobikey_customer_type,base.group_system,1,1,1,1
+access_mobikey_industry_type_user,mobikey.industry.type user,model_mobikey_industry_type,base.group_user,1,1,1,0
+access_mobikey_industry_type_manager,mobikey.industry.type manager,model_mobikey_industry_type,base.group_system,1,1,1,1

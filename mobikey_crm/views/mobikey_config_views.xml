@@ -1,0 +1,242 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ══════════════════════════════════════════════════════
+         VEHICLE TYPE
+         ══════════════════════════════════════════════════════ -->
+    <record id="mobikey_vehicle_type_view_list" model="ir.ui.view">
+        <field name="name">mobikey.vehicle.type.list</field>
+        <field name="model">mobikey.vehicle.type</field>
+        <field name="arch" type="xml">
+            <list string="Vehicle Types" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="mobikey_vehicle_type_view_form" model="ir.ui.view">
+        <field name="name">mobikey.vehicle.type.form</field>
+        <field name="model">mobikey.vehicle.type</field>
+        <field name="arch" type="xml">
+            <form string="Vehicle Type">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="sequence"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mobikey_vehicle_type" model="ir.actions.act_window">
+        <field name="name">Vehicle Types</field>
+        <field name="res_model">mobikey.vehicle.type</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'active_test': False}</field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════
+         INTENDED USE
+         ══════════════════════════════════════════════════════ -->
+    <record id="mobikey_intended_use_view_list" model="ir.ui.view">
+        <field name="name">mobikey.intended.use.list</field>
+        <field name="model">mobikey.intended.use</field>
+        <field name="arch" type="xml">
+            <list string="Intended Uses" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="mobikey_intended_use_view_form" model="ir.ui.view">
+        <field name="name">mobikey.intended.use.form</field>
+        <field name="model">mobikey.intended.use</field>
+        <field name="arch" type="xml">
+            <form string="Intended Use">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="sequence"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mobikey_intended_use" model="ir.actions.act_window">
+        <field name="name">Intended Uses</field>
+        <field name="res_model">mobikey.intended.use</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'active_test': False}</field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════
+         BUDGET RANGE
+         ══════════════════════════════════════════════════════ -->
+    <record id="mobikey_budget_range_view_list" model="ir.ui.view">
+        <field name="name">mobikey.budget.range.list</field>
+        <field name="model">mobikey.budget.range</field>
+        <field name="arch" type="xml">
+            <list string="Budget Ranges" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="mobikey_budget_range_view_form" model="ir.ui.view">
+        <field name="name">mobikey.budget.range.form</field>
+        <field name="model">mobikey.budget.range</field>
+        <field name="arch" type="xml">
+            <form string="Budget Range">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="sequence"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mobikey_budget_range" model="ir.actions.act_window">
+        <field name="name">Budget Ranges</field>
+        <field name="res_model">mobikey.budget.range</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'active_test': False}</field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════
+         CUSTOMER TYPE
+         ══════════════════════════════════════════════════════ -->
+    <record id="mobikey_customer_type_view_list" model="ir.ui.view">
+        <field name="name">mobikey.customer.type.list</field>
+        <field name="model">mobikey.customer.type</field>
+        <field name="arch" type="xml">
+            <list string="Customer Types" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="mobikey_customer_type_view_form" model="ir.ui.view">
+        <field name="name">mobikey.customer.type.form</field>
+        <field name="model">mobikey.customer.type</field>
+        <field name="arch" type="xml">
+            <form string="Customer Type">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="sequence"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mobikey_customer_type" model="ir.actions.act_window">
+        <field name="name">Customer Types</field>
+        <field name="res_model">mobikey.customer.type</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'active_test': False}</field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════
+         INDUSTRY TYPE
+         ══════════════════════════════════════════════════════ -->
+    <record id="mobikey_industry_type_view_list" model="ir.ui.view">
+        <field name="name">mobikey.industry.type.list</field>
+        <field name="model">mobikey.industry.type</field>
+        <field name="arch" type="xml">
+            <list string="Industry Types" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="mobikey_industry_type_view_form" model="ir.ui.view">
+        <field name="name">mobikey.industry.type.form</field>
+        <field name="model">mobikey.industry.type</field>
+        <field name="arch" type="xml">
+            <form string="Industry Type">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="sequence"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mobikey_industry_type" model="ir.actions.act_window">
+        <field name="name">Industry Types</field>
+        <field name="res_model">mobikey.industry.type</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'active_test': False}</field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════
+         ACCOUNT.PAYMENT.TERM — extend form view with financing_required
+         ══════════════════════════════════════════════════════ -->
+    <record id="account_payment_term_view_form_mobikey" model="ir.ui.view">
+        <field name="name">account.payment.term.form.mobikey</field>
+        <field name="model">account.payment.term</field>
+        <field name="inherit_id" ref="account.view_payment_term_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//label[@for='early_discount']" position="before">
+                <field name="financing_required"
+                       help="When this payment term is selected on a CRM opportunity, the financing approval workflow will be triggered automatically."/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════
+         CRM CONFIGURATION MENU ITEMS
+         ══════════════════════════════════════════════════════ -->
+    <menuitem id="menu_mobikey_vehicle_type"
+              name="Vehicle Types"
+              parent="crm.crm_menu_config"
+              action="action_mobikey_vehicle_type"
+              sequence="50"/>
+
+    <menuitem id="menu_mobikey_intended_use"
+              name="Intended Uses"
+              parent="crm.crm_menu_config"
+              action="action_mobikey_intended_use"
+              sequence="51"/>
+
+    <menuitem id="menu_mobikey_budget_range"
+              name="Budget Ranges"
+              parent="crm.crm_menu_config"
+              action="action_mobikey_budget_range"
+              sequence="52"/>
+
+    <menuitem id="menu_mobikey_customer_type"
+              name="Customer Types"
+              parent="crm.crm_menu_config"
+              action="action_mobikey_customer_type"
+              sequence="53"/>
+
+    <menuitem id="menu_mobikey_industry_type"
+              name="Industry Types"
+              parent="crm.crm_menu_config"
+              action="action_mobikey_industry_type"
+              sequence="54"/>
+
+</odoo>

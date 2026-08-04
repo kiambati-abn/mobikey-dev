@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Mobikey CRM — Pipeline Stage Master Data
+    =========================================
+    Creates the seven pipeline stages with:
+      - Fixed External IDs (used for reliable env.ref() lookups)
+      - mobikey_stage_type tags (the name-change-proof identifier used in all code)
+      - Proper sequence ordering
+
+    noupdate="1" means these records are created ONCE on first install and are
+    never overwritten by subsequent module upgrades.  This allows admins to
+    rename stages freely without breaking automation.
+
+    IMPORTANT FOR EXISTING DATABASES:
+    If your Odoo instance already has CRM stages with these names, this data
+    file will create NEW stage records alongside them.  In that case, either:
+      (a) Delete the old stages and reinstall the module, OR
+      (b) Manually open each existing stage (CRM → Configuration → Stages)
+          and set its "Mobikey Stage Role" field to the correct value.
+          Then delete the duplicate stages created by this data file.
+-->
+<odoo noupdate="1">
+
+    <record id="stage_qualified" model="crm.stage">
+        <field name="name">Qualified</field>
+        <field name="sequence">10</field>
+        <field name="mobikey_stage_type">qualified</field>
+    </record>
+
+    <record id="stage_demo" model="crm.stage">
+        <field name="name">Demo/Visit/Test Drive</field>
+        <field name="sequence">20</field>
+        <field name="mobikey_stage_type">demo</field>
+    </record>
+
+    <record id="stage_quotation" model="crm.stage">
+        <field name="name">Quotation</field>
+        <field name="sequence">30</field>
+        <field name="mobikey_stage_type">quotation</field>
+    </record>
+
+    <record id="stage_negotiation" model="crm.stage">
+        <field name="name">Negotiation</field>
+        <field name="sequence">40</field>
+        <field name="mobikey_stage_type">negotiation</field>
+    </record>
+
+    <record id="stage_booking" model="crm.stage">
+        <field name="name">Booking/Commitment</field>
+        <field name="sequence">50</field>
+        <field name="mobikey_stage_type">booking</field>
+    </record>
+
+    <record id="stage_won" model="crm.stage">
+        <field name="name">Won</field>
+        <field name="sequence">60</field>
+        <field name="mobikey_stage_type">won</field>
+    </record>
+
+    <record id="stage_lost" model="crm.stage">
+        <field name="name">Lost</field>
+        <field name="sequence">70</field>
+        <field name="mobikey_stage_type">lost</field>
+    </record>
+
+</odoo>

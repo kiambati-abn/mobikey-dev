@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<odoo>
+    <data>
+        <record id="email_template_trade_in_approval" model="mail.template">
+            <field name="name">Trade In Approval Request</field>
+            <field name="model_id" ref="crm.model_crm_lead"/>
+            <field name="partner_to" eval="False"/>
+            <field name="email_to" eval="False"/>
+            <field name="use_default_to" eval="True"/>
+            <field name="subject">Trade In Approval Request</field>
+            <field name="body_html" type="html">
+                <div style="font-family: Arial, sans-serif; font-size: 14px; color: #333;">
+                    <p>Hi <t t-out="ctx.get('approver_name') or 'User'"/>
+                        ,</p>
+                    <p>The CRM Opportunity <b><t t-out="object.name or ''"/></b> requires <strong>Trade In approval</strong>.</p>
+                        <p>
+                            Click here to review:
+                            <a t-att-href="object.get_record_url()">
+                                View Opportunity
+                            </a>
+                        </p>
+
+                    <p>Thanks,<br/>
+                        <t t-if="object.user_id">
+                            <b><t t-out="object.user_id.name or ''"/></b><br/>
+                            Email: <t t-out="object.user_id.email or ''"/><br/>
+                            Phone: <t t-out="object.user_id.phone or ''"/>
+                        </t>
+                        <t t-else="">
+                            <t t-out="object.company_id.name or ''"/>
+                        </t>
+                    </p>
+
+                    <hr style="border:0; border-top:1px solid #ccc; margin:20px 0;"/>
+
+                    <p style="font-size:11px; color:#888;">
+                        <t t-out="object.company_id.name or ''"/> | <t t-out="object.company_id.email or ''"/> | <t t-out="object.company_id.phone or ''"/>
+                    </p>
+                </div>
+            </field>
+            <field name="auto_delete" eval="False"/>
+        </record>
+    </data>
+</odoo>

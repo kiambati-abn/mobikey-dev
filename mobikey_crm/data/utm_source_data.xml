@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+
+        <!--
+            Pre-populate utm.source records for Mobikey lead entry channels.
+            These appear in the native "Source" field on leads/opportunities
+            and integrate cleanly with Odoo's marketing attribution (UTM).
+
+            noupdate="1" ensures these aren't overwritten on module upgrade,
+            allowing users to rename or add sources freely after install.
+        -->
+
+        <record id="utm_source_walkin" model="utm.source">
+            <field name="name">Walk-in</field>
+        </record>
+
+        <record id="utm_source_website" model="utm.source">
+            <field name="name">Website</field>
+        </record>
+
+        <record id="utm_source_phone_call" model="utm.source">
+            <field name="name">Phone Call</field>
+        </record>
+
+        <record id="utm_source_dealer_agent" model="utm.source">
+            <field name="name">Dealer / Agent</field>
+        </record>
+
+        <record id="utm_source_government_tender" model="utm.source">
+            <field name="name">Government Tender</field>
+        </record>
+
+        <record id="utm_source_ngo" model="utm.source">
+            <field name="name">NGO</field>
+        </record>
+
+        <record id="utm_source_referral" model="utm.source">
+            <field name="name">Referral</field>
+        </record>
+
+        <record id="utm_source_social_media" model="utm.source">
+            <field name="name">Social Media</field>
+        </record>
+
+        <record id="utm_source_whatsapp" model="utm.source">
+            <field name="name">Phone / WhatsApp</field>
+        </record>
+
+        <record id="utm_source_fleet_tender" model="utm.source">
+            <field name="name">Fleet Tender / B2B Inquiry</field>
+        </record>
+
+        <record id="utm_source_marketing_campaign" model="utm.source">
+            <field name="name">Marketing Campaign</field>
+        </record>
+
+    </data>
+</odoo>

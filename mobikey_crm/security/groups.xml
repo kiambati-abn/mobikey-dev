@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+        <record model="ir.module.category" id="module_crm_approval">
+            <field name="name">CRM Approval</field>
+            <field name="sequence">45</field>
+        </record>
+        <record model="res.groups.privilege" id="res_groups_crm_approval_privilege">
+            <field name="name">CRM Approval</field>
+            <field name="category_id" ref="module_crm_approval"/>
+        </record>
+        <!-- Sales Manager — approves discounts/margins ≤ 2 % -->
+        <record id="group_mobikey_sales_manager" model="res.groups">
+            <field name="name">Sales Manager</field>
+            <field name="privilege_id" ref="res_groups_crm_approval_privilege"/>
+        </record>
+
+        <!-- Country Director — approves discounts/margins 2–5 % -->
+        <record id="group_mobikey_country_director" model="res.groups">
+            <field name="name">Country Director</field>
+            <field name="privilege_id" ref="res_groups_crm_approval_privilege"/>
+            <!-- Country Directors can do everything a Sales Manager can -->
+            <field name="implied_ids" eval="[(4, ref('mobikey_crm.group_mobikey_sales_manager'))]"/>
+        </record>
+
+
+        <!-- Country GM — approve commission -->
+        <record id="group_mobikey_country_gm" model="res.groups">
+            <field name="name">Country GM</field>
+            <field name="privilege_id" ref="res_groups_crm_approval_privilege"/>
+
+            <!-- GM should be above Sales Manager -->
+            <field name="implied_ids" eval="[(4, ref('mobikey_crm.group_mobikey_sales_manager'))]"/>
+        </record>
+
+        <!-- HQ — approves discounts/margins > 5 % -->
+        <record id="group_mobikey_hq" model="res.groups">
+            <field name="name">HQ</field>
+            <field name="privilege_id" ref="res_groups_crm_approval_privilege"/>
+            <!-- HQ users inherit Country Director permissions -->
+            <field name="implied_ids" eval="[(4, ref('mobikey_crm.group_mobikey_country_director'))]"/>
+        </record>
+
+        <!-- Finance — approves financing requests and trade-in deals -->
+        <record id="group_mobikey_finance" model="res.groups">
+            <field name="name">Finance</field>
+            <field name="privilege_id" ref="res_groups_crm_approval_privilege"/>
+        </record>
+
+    </data>
+</odoo>

@@ -1,0 +1,451 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- ══════════════════════════════════════════════════════
+         FORM VIEW — crm.lead (shared for leads & opportunities)
+         ══════════════════════════════════════════════════════ -->
+    <record id="mobikey_crm_lead_view_form" model="ir.ui.view">
+        <field name="name">crm.lead.form.mobikey</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="priority">20</field>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='stage_id']" position="after">
+                <field name="mobikey_current_stage_type" invisible="1"/>
+                <field name="status_name" invisible="1" force_save="1"/>
+            </xpath>
+
+            <xpath expr="//field[@name='user_id']" position="after">
+                <field name="after_sales_user_id" />
+            </xpath>
+
+            <!--
+                Make the status-bar read-only so users cannot click stages directly.
+                All movement must go through the action buttons below.
+            -->
+            <xpath expr="//field[@name='stage_id']" position="attributes">
+                <attribute name="readonly">1</attribute>
+            </xpath>
+            <xpath expr="//form//sheet" position="inside">
+                <widget name="web_ribbon" title="Approval Pending" bg_color="bg-danger"
+                        invisible="margin_approval_status != 'pending' and discount_approval_status != 'pending' and financing_approval_status != 'pending' and trade_in_approval_status != 'pending'"/>
+                <!-- Commission Approved Ribbon -->
+                <widget name="web_ribbon" title="Commission Approval Pending"
+                        bg_color="bg-danger" invisible="commission_approval_status != 'pending'"/>
+                <widget name="web_ribbon" title="Commission Approved"
+                        bg_color="bg-success" invisible="commission_approval_status != 'approved'"/>
+                
+
+            </xpath>
+
+            <!-- ─────────────────────────────────────────────
+                 HEADER BUTTONS — Stage progression
+                 Visibility is driven by mobikey_current_stage_type,
+                 NOT by stage name.  Renaming a stage never hides/shows
+                 the wrong buttons.
+                 ───────────────────────────────────────────── -->
+            <xpath expr="//header" position="inside">
+                <button name="action_margin_approval"
+                        string="Margin Approve"
+                        type="object"
+                        class="btn-primary"
+                        invisible="margin_approval_status != 'pending'"/>
+
+                <button name="action_discount_approval"
+                        string="Discount Approve"
+                        type="object"
+                        class="btn-primary"
+                        invisible="discount_approval_status != 'pending'"/>
+
+                <button name="action_financial_approval"
+                        string="Financing Approve"
+                        type="object"
+                        class="btn-primary"
+                        invisible="financing_approval_status != 'pending' or not financing_required"/>
+
+                <button name="action_trade_in_approval"
+                        string="Trade-In Approve"
+                        type="object"
+                        class="btn-primary"
+                        invisible="not trade_in or trade_in_approval_status != 'pending'"/>
+
+                <!--
+                    Qualified → Next
+                    Branches internally:
+                      demo_required=True  → Demo/Visit/Test Drive
+                      demo_required=False → Quotation (if quotation exists)
+                      demo_required=False → Error     (no quotation yet)
+                -->
+                <button name="action_next_stage"
+                        string="Next →"
+                        type="object"
+                        class="btn-primary"
+                        invisible="type != 'opportunity' or mobikey_current_stage_type != 'qualified'"/>
+
+                <!--
+                    Demo → Move to Quotation
+                    Requires at least one sale.order linked to this opportunity.
+                -->
+                <button name="action_move_to_quotation"
+                        string="Move to Quotation →"
+                        type="object"
+                        class="btn-primary"
+                        invisible="type != 'opportunity' or mobikey_current_stage_type != 'demo'"/>
+
+                <!--
+                    Quotation → Move to Negotiation (manual, no email required)
+                    Auto-move also happens when a quotation email is sent
+                    (handled in sale_order.py).
+                -->
+                <button name="action_move_to_negotiation"
+                        string="Move to Negotiation →"
+                        type="object"
+                        class="btn-primary"
+                        invisible="type != 'opportunity' or mobikey_current_stage_type != 'quotation'"/>
+
+                <!--
+                    Negotiation → Move to Booking/Commitment
+                -->
+                <button name="action_move_to_booking"
+                        string="Move to Booking →"
+                        type="object"
+                        class="btn-primary"
+                        invisible="type != 'opportunity' or mobikey_current_stage_type != 'negotiation'"/>
+
+                <!--
+                    Reset to Draft — available from any stage AFTER Qualified.
+                    Cancels all open quotations and returns to Qualified.
+                    Shown as a secondary (non-highlighted) button.
+                -->
+                <button name="action_reset_to_draft"
+                        string="Reset to Draft"
+                        type="object"
+                        class="btn-secondary"
+                        confirm="This will cancel all open quotations linked to this opportunity and reset it to the Qualified stage. Continue?"
+                        invisible="type != 'opportunity' or not mobikey_current_stage_type or mobikey_current_stage_type == 'qualified'"/>
+
+                
+                <button name="action_approve_commission"
+                    string="Approve Commission"
+                    type="object"
+                    class="btn-primary"
+                    groups="mobikey_crm.group_mobikey_hq,mobikey_crm.group_mobikey_country_director,base.group_system"
+                    invisible="commission_approval_status != 'pending'"/>
+
+            </xpath>
+
+            <!-- ─────────────────────────────────────────────
+                 KEY CLASSIFICATION — above the notebook
+                 Visible on every lead/opportunity at a glance.
+                 ───────────────────────────────────────────── -->
+
+                        <!-- Replace the original "Convert to Opportunity" button -->
+            <xpath expr="//button[@name='%(crm.action_crm_lead2opportunity_partner)d']" position="replace">
+
+                <!--
+                    ACTIVE (normal) button:
+                    Visible when lead is NOT disqualified AND type == 'lead' AND active
+                -->
+                <button
+                    name="%(crm.action_crm_lead2opportunity_partner)d"
+                    string="Convert to Opportunity"
+                    type="action"
+                    class="oe_highlight"
+                    data-hotkey="v"
+                    invisible="type == 'opportunity' or not active or lead_status == 'disqualified'"/>
+
+                <!--
+                    DISABLED (visual-only) button:
+                    Visible ONLY when lead_status == 'disqualified'
+                    Uses 'disabled' attribute + muted styling to prevent interaction
+                -->
+                <button
+                    string="Convert to Opportunity"
+                    type="object"
+                    class="btn btn-secondary opacity-50"
+                    title="Cannot convert a disqualified lead. Change the lead status first."
+                    disabled="1"
+                    invisible="type == 'opportunity' or not active or lead_status != 'disqualified'"/>
+
+            </xpath>
+            <xpath expr="//button[@name='action_set_won_rainbowman']" position="attributes">
+                <attribute name="invisible">won_status == 'won' or type == 'lead' or not active or status_name != 'Booking / Commitment'</attribute>
+                <attribute name="groups">base.group_system,mobikey_crm.group_mobikey_sales_manager,mobikey_crm.group_mobikey_country_director</attribute>
+            </xpath>
+
+            <xpath expr="//notebook" position="before">
+                <group string="Deal Summary">
+                    <group>
+                        <field name="financing_required" readonly="1"/>
+                        <field name="demo_required"/>
+                        <field name="trade_in_approval_status" invisible="1"/>
+                        <field name="trade_in" readonly="trade_in_approval_status == 'approved'"/>
+                        <field name="trade_in_valuation" invisible="not trade_in" />
+                        <field name="deal_type"/>
+                        <field name="bank_id" invisible="deal_type != 'financing'"/>
+                        <field name="price_list"/>
+                    </group>
+                    <group>
+                        <group>
+                            <field name="discount_approval_required"/>
+                            <field name="discount_approval_status"
+                                   widget="badge"
+                                   decoration-success="discount_approval_status == 'approved'"
+                                   decoration-warning="discount_approval_status == 'pending'"
+                                   decoration-danger="discount_approval_status == 'rejected'"
+                                   decoration-muted="discount_approval_status == 'not_required'"/>
+                        </group>
+                        <group>
+                            <field name="margin_approval_required"/>
+                            <field name="margin_approval_status"
+                                   widget="badge"
+                                   decoration-success="margin_approval_status == 'approved'"
+                                   decoration-warning="margin_approval_status == 'pending'"
+                                   decoration-danger="margin_approval_status == 'rejected'"
+                                   decoration-muted="margin_approval_status == 'not_required'"/>
+                        </group>
+                        <group>
+                            <field name="financing_approval_required"/>
+                            <field name="financing_approval_status"
+                                   widget="badge"
+                                   decoration-success="financing_approval_status == 'approved'"
+                                   decoration-warning="financing_approval_status == 'pending'"
+                                   decoration-danger="financing_approval_status == 'rejected'"
+                                   decoration-muted="financing_approval_status == 'not_required'"/>
+                        </group>
+                        <group>
+                            <field name="trade_in_approval_required"/>
+                            <field name="trade_in_approval_status"
+                                   widget="badge"
+                                   decoration-success="trade_in_approval_status == 'approved'"
+                                   decoration-warning="trade_in_approval_status == 'pending'"
+                                   decoration-danger="trade_in_approval_status == 'rejected'"
+                                   decoration-muted="trade_in_approval_status == 'not_required'"/>
+                        </group>
+                    </group>
+
+                </group>
+            </xpath>
+
+            <!-- ─────────────────────────────────────────────
+                 NOTEBOOK PAGE — Vehicle & Equipment
+                 ───────────────────────────────────────────── -->
+            <xpath expr="//page[@name='internal_notes']" position="before">
+                <page string="Products" name="products">
+                    <field name="product_line_ids" mode="list">
+                        <list editable="top">
+                            <field name="product_id"  options='{"no_open": True}'/>
+                            <field name="category_id"/>
+                            <field name="model_id"/>
+                            <field name="quantity"/>
+                            <field name="discount"/>
+                            <field name="price_unit"/>
+                            <field name="margin" groups="base.group_system,mobikey_crm.group_mobikey_country_director,mobikey_crm.group_mobikey_country_gm,mobikey_crm.group_mobikey_finance,mobikey_crm.group_mobikey_hq"/>
+                            <field name="sale_order_line_id" column_invisible="1" force_save="1"/>
+                        </list>
+                    </field>
+                </page>
+                <page string="Vehicle &amp; Equipment" name="vehicle_equipment">
+                    <group>
+                        <group string="Vehicle Details">
+                            <field name="vehicle_type"/>
+                            <field name="intended_use"/>
+                            <field name="vehicle_condition"/>
+                            <field name="year" invisible="vehicle_condition != 'used'"/>
+                            <field name="mileage" invisible="vehicle_condition != 'used'"/>
+                            <field name="vehicle_source" invisible="vehicle_condition != 'used'"/>
+                            <field name="reconditioning_cost" invisible="vehicle_condition != 'used'"/>
+                        </group>
+                        <group >
+<!--                            <field name="year" invisible="vehicle_condition != 'used'"/>-->
+<!--                            <field name="mileage" invisible="vehicle_condition != 'used'"/>-->
+<!--                            <field name="vehicle_source" invisible="vehicle_condition != 'used'"/>-->
+<!--                            <field name="reconditioning_cost" invisible="vehicle_condition != 'used'"/>-->
+                            <field name="expected_delivery_date"/>
+                            <field name="delivery_location"/>
+                            <field name="sales_region"/>
+                        </group>
+                    </group>
+                </page>
+<!--                <page string="Commercial" name="commercial_details">-->
+<!--                    <group>-->
+<!--                        <group>-->
+<!--                            <field name="deal_type"/>-->
+<!--                            <field name="expected_revenue" readonly="1"/>-->
+<!--                        </group>-->
+<!--                        <group>-->
+<!--                            <field name="price_list"/>-->
+<!--                            <field name="discount"/>-->
+<!--                            <field name="margin" invisible="1"/>-->
+<!--                        </group>-->
+<!--                    </group>-->
+<!--                </page>-->
+
+                <!-- ─────────────────────────────────────────
+                     NOTEBOOK PAGE — Buying Intent
+                     ───────────────────────────────────────── -->
+                <page string="Buying Intent" name="buying_intent">
+                    <group>
+                        <group string="Budget &amp; Timeline">
+                            <field name="purchase_timeframe"/>
+                            <field name="budget_range"/>
+                            <field name="payment_terms_type" readonly="financing_approval_status == 'pending'"/>
+                        </group>
+                    </group>
+                </page>
+
+                <!-- ─────────────────────────────────────────
+                     NOTEBOOK PAGE — Customer Profile
+                     ───────────────────────────────────────── -->
+                <page string="Customer Profile" name="customer_profile">
+                    <group>
+                        <group string="Profile">
+                            <field name="customer_type"/>
+                            <field name="industry_type"/>
+                            <field name="is_fleet_customer"/>
+                        </group>
+                        <group string="Location &amp; Language">
+                            <field name="country_id"/>
+                            <field name="state_id"/>
+                            <field name="preferred_language"/>
+                            <field name="walkin_location"/>
+                        </group>
+                    </group>
+                </page>
+
+                <!-- ─────────────────────────────────────────
+                     NOTEBOOK PAGE — Lead Source Details
+                     ───────────────────────────────────────── -->
+<!--                <page string="Lead Source" name="lead_source_details">-->
+<!--                    <group>-->
+<!--                        <group string="Source">-->
+<!--                            <field name="source_id"-->
+<!--                                   help="Primary lead entry channel (native UTM Source)."/>-->
+<!--                            <field name="sub_source"/>-->
+<!--                            <field name="referral_name"/>-->
+<!--                            <field name="walkin_location"/>-->
+<!--                        </group>-->
+<!--                        <group string="Lead Intelligence">-->
+<!--                            <field name="lead_score"/>-->
+<!--                        </group>-->
+<!--                    </group>-->
+<!--                </page>-->
+
+                <!-- ─────────────────────────────────────────
+                     NOTEBOOK PAGE — Qualification (leads only)
+                     ───────────────────────────────────────── -->
+                <page string="Qualification" name="lead_qualification"
+                      invisible="type != 'lead'">
+                    <group>
+                        <group string="Status">
+                            <field name="lead_status"/>
+                        </group>
+                    </group>
+                    <!-- Disqualification — conditionally visible -->
+                    <group string="Disqualification Details"
+                           invisible="lead_status != 'disqualified'">
+                        <group>
+                            <field name="disqualification_reason"
+                                   required="lead_status == 'disqualified'"/>
+                        </group>
+                        <group>
+                            <field name="disqualification_notes"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════
+         TREE / LIST VIEW — Leads
+         ══════════════════════════════════════════════════════ -->
+    <record id="mobikey_crm_lead_tree_view_leads" model="ir.ui.view">
+        <field name="name">crm.lead.tree.leads.mobikey</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_case_tree_view_leads"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='tag_ids']" position="before">
+<!--                <field name="country_id" optional="show"/>-->
+                <field name="customer_type" optional="show"/>
+                <field name="vehicle_type" optional="show"/>
+                <field name="lead_status" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════
+         TREE / LIST VIEW — Opportunities
+         ══════════════════════════════════════════════════════ -->
+    <record id="mobikey_crm_lead_tree_view_oppor" model="ir.ui.view">
+        <field name="name">crm.lead.tree.oppor.mobikey</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_case_tree_view_oppor"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='tag_ids']" position="before">
+<!--                <field name="country_id" optional="show"/>-->
+                <field name="customer_type" optional="show"/>
+                <field name="vehicle_type" optional="show"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════
+         SEARCH VIEW — add filters and group-by options
+         ══════════════════════════════════════════════════════ -->
+    <record id="mobikey_crm_lead_search_view" model="ir.ui.view">
+        <field name="name">crm.lead.search.mobikey</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.view_crm_case_leads_filter"/>
+        <field name="arch" type="xml">
+
+            <!-- Filters -->
+            <xpath expr="//filter[@name='inactive']" position="after">
+                <separator/>
+
+                <filter string="Trade-In" name="trade_in"
+                        domain="[('trade_in', '=', True)]"/>
+                <separator/>
+                <filter string="Status: Qualified" name="status_qualified"
+                        domain="[('lead_status', '=', 'qualified')]"/>
+                <filter string="Status: Disqualified" name="status_disqualified"
+                        domain="[('lead_status', '=', 'disqualified')]"/>
+            </xpath>
+
+            <!-- Group By -->
+            <xpath expr="//filter[@name='group_by_lead_properties']" position="after">
+                <filter string="Country" name="group_country" context="{'group_by': 'country_id'}" />
+                <filter string="Customer Type" name="group_customer_type"
+                        context="{'group_by': 'customer_type'}"/>
+                <filter string="Vehicle Type" name="group_vehicle_type"
+                        context="{'group_by': 'vehicle_type'}"/>
+                <filter string="Lead Status" name="group_lead_status"
+                        context="{'group_by': 'lead_status'}"/>
+            </xpath>
+
+        </field>
+    </record>
+
+    <!-- ══════════════════════════════════════════════════════
+         SEARCH VIEW — Opportunities (separate inherited view)
+         ══════════════════════════════════════════════════════ -->
+    <record id="mobikey_crm_opportunity_search_view" model="ir.ui.view">
+        <field name="name">crm.lead.search.oppor.mobikey</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.view_crm_case_opportunities_filter"/>
+        <field name="arch" type="xml">
+
+            <xpath expr="//filter[@name='group_by_lead_properties']" position="after">
+                <filter string="Country" name="opp_group_country"
+                        context="{'group_by': 'country_id'}"/>
+                <filter string="Customer Type" name="opp_group_customer_type"
+                        context="{'group_by': 'customer_type'}"/>
+                <filter string="Vehicle Type" name="opp_group_vehicle_type"
+                        context="{'group_by': 'vehicle_type'}"/>
+            </xpath>
+
+        </field>
+    </record>
+
+</odoo>

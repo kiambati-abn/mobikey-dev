@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<odoo>
+
+    <!-- list View -->
+    <record id="view_product_brand_list" model="ir.ui.view">
+        <field name="name">product.brand.list</field>
+        <field name="model">product.brand</field>
+        <field name="arch" type="xml">
+            <list editable="top">
+                <field name="name"/>
+                <field name="code"/>
+                <field name="description"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_product_brand" model="ir.actions.act_window">
+        <field name="name">Product Brands</field>
+        <field name="res_model">product.brand</field>
+        <field name="view_mode">list</field>
+        <field name="view_id" ref="view_product_brand_list"/>
+    </record>
+
+    <!-- Menu (Under Products) -->
+    <menuitem
+        id="menu_product_brand"
+        name="Product Brands"
+        parent="crm.menu_crm_config_lead"
+        action="action_product_brand"
+        sequence="25"
+    />
+
+</odoo>
