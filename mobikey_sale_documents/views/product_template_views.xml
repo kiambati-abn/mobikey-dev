@@ -17,7 +17,7 @@
                     <group string="OBS (Product Sales Description)">
                         <field name="description_sale"
                                nolabel="1"
-                               placeholder="Customer-facing observation printed below the main-product characteristics."/>
+                               placeholder="Customer-facing observation printed below this product's characteristics."/>
                     </group>
                     <group string="Ordered Specifications">
                         <field name="mobikey_specification_line_ids" nolabel="1">

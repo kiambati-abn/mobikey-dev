@@ -84,14 +84,20 @@
                                    invisible="brand_source != 'template'"
                                    required="brand_source == 'template'"/>
                             <field name="issuer_logo" widget="image" class="oe_avatar"/>
+                            <field name="issuer_logo_size"
+                                   widget="radio"
+                                   options="{'horizontal': true}"/>
+                            <field name="manufacturer_logo_size"
+                                   widget="radio"
+                                   options="{'horizontal': true}"/>
                         </group>
                     </group>
                     <notebook>
                         <page string="Appearance" name="appearance">
                             <group>
                                 <group>
-                                    <field name="primary_color" placeholder="#1A5A96"/>
-                                    <field name="accent_color" placeholder="#E9EEF4"/>
+                                    <field name="primary_color" placeholder="#305496"/>
+                                    <field name="accent_color" placeholder="#A9D08E"/>
                                 </group>
                                 <group>
                                     <field name="footer_note" widget="html"/>

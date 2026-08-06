@@ -34,6 +34,8 @@ class TestMobikeySaleDocuments(TransactionCase):
         cls.document_template = cls.env['mobikey.document.template'].create({
             'name': 'Test Branded Proforma',
             'company_id': cls.env.company.id,
+            'primary_color': '#305496',
+            'accent_color': '#A9D08E',
             'brand_source': 'template',
             'brand_ids': [Command.set(cls.brand.ids)],
             'bank_account_ids': [Command.set(cls.bank_account.ids)],
@@ -122,6 +124,23 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertEqual(line.mobikey_observation, original_observation)
         self.assertEqual(line.mobikey_warranty, original_warranty)
 
+    def test_draft_observation_fallback_and_refresh(self):
+        order = self._create_order()
+        line = order.order_line
+        line.mobikey_observation = False
+        self.product_template.description_sale = 'Updated draft OBS text.'
+
+        self.assertEqual(
+            line._get_mobikey_report_observation(),
+            'Updated draft OBS text.',
+        )
+        order.action_mobikey_refresh_document_details()
+        self.assertEqual(line.mobikey_observation, 'Updated draft OBS text.')
+
+        order.state = 'sent'
+        with self.assertRaises(UserError):
+            order.action_mobikey_refresh_document_details()
+
     def test_product_model_title_does_not_hide_model_variant(self):
         model_attribute = self.env['product.attribute'].create({
             'name': 'Model',
@@ -137,7 +156,7 @@ class TestMobikeySaleDocuments(TransactionCase):
             'sale_ok': True,
             'list_price': 1000.0,
             'mobikey_document_brand_id': self.brand.id,
-            'mobikey_show_product_details': True,
+            'mobikey_show_product_details': False,
             'attribute_line_ids': [Command.create({
                 'attribute_id': model_attribute.id,
                 'value_ids': [Command.set(model_variant.ids)],
@@ -153,6 +172,10 @@ class TestMobikeySaleDocuments(TransactionCase):
         })])
 
         self.assertEqual(order.order_line.mobikey_product_model, 'TGA 26.360')
+        self.assertEqual(
+            order._get_mobikey_characteristic_product_lines(),
+            order.order_line,
+        )
         self.assertIn(
             {'label': 'Model', 'value': 'HB4 / Flat Roof'},
             order.order_line.mobikey_detail_snapshot,
@@ -216,7 +239,7 @@ class TestMobikeySaleDocuments(TransactionCase):
                 mobikey_document_template_id=other_template.id,
             )
 
-    def test_all_main_products_precede_one_commercial_section(self):
+    def test_all_characteristic_products_precede_one_commercial_section(self):
         second_main = self.product_template.copy({
             'name': 'Second Main Product',
             'model': 'MAIN MODEL TWO',
@@ -225,9 +248,10 @@ class TestMobikeySaleDocuments(TransactionCase):
             'name': 'Third Main Product',
             'model': 'MAIN MODEL THREE',
         })
-        extra = self.product_template.copy({
+        extra = self.env['product.template'].create({
             'name': 'Identifiable Extra Product',
-            'model': False,
+            'sale_ok': True,
+            'list_price': 100.0,
             'description_sale': 'Extra sales description that must not print.',
             'mobikey_show_product_details': False,
         })
@@ -251,7 +275,10 @@ class TestMobikeySaleDocuments(TransactionCase):
             for product in products
         ])
 
-        self.assertEqual(len(order._get_mobikey_main_product_lines()), 3)
+        self.assertEqual(
+            len(order._get_mobikey_characteristic_product_lines()),
+            3,
+        )
         self.assertEqual(
             order.order_line[-1]._get_mobikey_commercial_description(),
             extra.product_variant_id.display_name,
@@ -324,8 +351,31 @@ class TestMobikeySaleDocuments(TransactionCase):
         )[0]
         self.assertEqual(len(header.xpath('.//img')), 3)
         self.assertNotIn(self.env.company.name, header.text_content())
-        self.assertIn('max-width: 34mm', report_html.decode())
+        self.assertIn('width: 50%; height: 23mm', report_html.decode())
+        self.assertIn('max-width: 60mm', report_html.decode())
+        self.assertIn('max-width: 42mm', report_html.decode())
+        self.assertIn('background: #E5F1DD', report_html.decode())
         self.assertIn(b'Nairobi, Kenya', report_html)
+
+    def test_template_logo_size_and_color_choices_are_bounded(self):
+        self.document_template.write({
+            'issuer_logo_size': 'large',
+            'manufacturer_logo_size': 'large',
+        })
+
+        single_brand = self.document_template._get_mobikey_logo_dimensions(1)
+        self.assertEqual(single_brand['issuer_width'], 75)
+        self.assertEqual(single_brand['issuer_height'], 21)
+        self.assertEqual(single_brand['brand_width'], 60)
+        self.assertEqual(single_brand['brand_height'], 19)
+
+        four_brands = self.document_template._get_mobikey_logo_dimensions(4)
+        self.assertEqual(four_brands['brand_width'], 20)
+        self.assertEqual(four_brands['brand_height'], 9)
+        self.assertEqual(
+            self.document_template._get_mobikey_accent_tint(),
+            '#E5F1DD',
+        )
 
     def test_native_report_renders_custom_dispatch(self):
         order = self._create_order()
@@ -336,11 +386,16 @@ class TestMobikeySaleDocuments(TransactionCase):
         )
 
         self.assertEqual(report_type, 'html')
-        self.assertIn(b'Description and Main Product Characteristics', html)
+        self.assertIn(b'Description and Product Characteristics', html)
         self.assertIn(b'Test Manufacturer', html)
         self.assertIn(b'TGA 26.360', html)
-        self.assertIn(b'Obs:', html)
+        self.assertIn(b'OBS:', html)
         self.assertIn(b'Customer-facing vehicle observation.', html)
+        rendered_html = html.decode()
+        self.assertIn('font-size: 10pt; line-height: 1.3', rendered_html)
+        self.assertIn('background: #305496; color: #FFFFFF', rendered_html)
+        self.assertIn('background: #E5F1DD', rendered_html)
+        self.assertIn('mobikey-borderless', rendered_html)
 
         proforma_html, proforma_report_type = (
             self.env['ir.actions.report']._render_qweb_html(
@@ -360,5 +415,5 @@ class TestMobikeySaleDocuments(TransactionCase):
         )
 
         self.assertEqual(report_type, 'html')
-        self.assertNotIn(b'Description and Main Product Characteristics', html)
+        self.assertNotIn(b'Description and Product Characteristics', html)
         self.assertIn(b'Quotation', html)

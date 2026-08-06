@@ -13,6 +13,13 @@
 
             <xpath expr="//page[@name='order_lines']" position="after">
                 <page string="Proforma Details" name="mobikey_proforma_details">
+                    <button name="action_mobikey_refresh_document_details"
+                            type="object"
+                            string="Refresh Product Document Details"
+                            class="btn-secondary"
+                            icon="fa-refresh"
+                            invisible="state != 'draft'"
+                            confirm="This replaces the draft line model, OBS, warranty, attributes, and specifications with the current product values. Continue?"/>
                     <group>
                         <group string="Commercial Document">
                             <field name="mobikey_delivery_terms" readonly="locked"/>
