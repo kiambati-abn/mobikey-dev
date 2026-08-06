@@ -17,7 +17,9 @@ templates.
    Detailed Specifications** to force one for any other product.
 4. In **Sales > Configuration > Proforma Templates**, create a template for a
    company/branch and configure its dealer logo override, manufacturer-logo
-   strategy, colors, bank accounts, terms, footer, and signatories.
+   strategy, visible logo-size choices, colors, bank accounts, terms, footer,
+   and signatories. Logo sizes are displayed as radio choices in the template's
+   **Branding** group.
 
 Only Sales Managers can maintain brands and document templates. Salespeople can
 read and select them.
@@ -69,8 +71,13 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
 - For crisp PDF output, upload tightly cropped transparent PNG artwork without
   empty margins, ideally around 1024 x 300 px for a wide logo. The report never
   stretches or crops the image.
-- Printed body text uses a readable 9.5 pt baseline, borderless two-column product
-  characteristics, a shaded OBS row, and an 8.5 pt borderless company footer.
+- Printed body text uses a readable 10 pt baseline, borderless two-column product
+  characteristics, a shaded OBS row, 9 pt terms, and an 8.5 pt borderless company
+  footer. The layout prioritizes readability over forcing content onto two pages.
+- Primary color is used for high-contrast section hierarchy and the accent color
+  for smaller highlights. A pale accent tint is generated automatically for larger
+  customer, product, OBS, and bank backgrounds so the page does not become visually
+  saturated.
 - The normal Odoo report actions and mail templates are not replaced. Uninstalling
   this addon restores standard rendering without leaving rewritten report actions.
 - Bank accounts are restricted to the sales-order company/branch. Templates are

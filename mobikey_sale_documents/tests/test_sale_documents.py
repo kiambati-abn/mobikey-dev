@@ -34,6 +34,8 @@ class TestMobikeySaleDocuments(TransactionCase):
         cls.document_template = cls.env['mobikey.document.template'].create({
             'name': 'Test Branded Proforma',
             'company_id': cls.env.company.id,
+            'primary_color': '#305496',
+            'accent_color': '#A9D08E',
             'brand_source': 'template',
             'brand_ids': [Command.set(cls.brand.ids)],
             'bank_account_ids': [Command.set(cls.bank_account.ids)],
@@ -353,7 +355,7 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertIn('max-width: 42mm', report_html.decode())
         self.assertIn(b'Nairobi, Kenya', report_html)
 
-    def test_template_logo_size_choices_are_bounded(self):
+    def test_template_logo_size_and_color_choices_are_bounded(self):
         self.document_template.write({
             'issuer_logo_size': 'large',
             'manufacturer_logo_size': 'large',
@@ -368,6 +370,10 @@ class TestMobikeySaleDocuments(TransactionCase):
         four_brands = self.document_template._get_mobikey_logo_dimensions(4)
         self.assertEqual(four_brands['brand_width'], 20)
         self.assertEqual(four_brands['brand_height'], 9)
+        self.assertEqual(
+            self.document_template._get_mobikey_accent_tint(),
+            '#E5F1DD',
+        )
 
     def test_native_report_renders_custom_dispatch(self):
         order = self._create_order()
@@ -383,6 +389,11 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertIn(b'TGA 26.360', html)
         self.assertIn(b'OBS:', html)
         self.assertIn(b'Customer-facing vehicle observation.', html)
+        rendered_html = html.decode()
+        self.assertIn('font-size: 10pt; line-height: 1.3', rendered_html)
+        self.assertIn('background: #305496; color: #FFFFFF', rendered_html)
+        self.assertIn('background: #E5F1DD', rendered_html)
+        self.assertIn('mobikey-borderless', rendered_html)
 
         proforma_html, proforma_report_type = (
             self.env['ir.actions.report']._render_qweb_html(

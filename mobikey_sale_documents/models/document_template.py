@@ -96,8 +96,8 @@ class MobikeyDocumentTemplate(models.Model):
         default='auto',
         help='Automatic is recommended for quotations containing multiple brands.',
     )
-    primary_color = fields.Char(required=True, default='#1A5A96')
-    accent_color = fields.Char(required=True, default='#E9EEF4')
+    primary_color = fields.Char(required=True, default='#305496')
+    accent_color = fields.Char(required=True, default='#A9D08E')
     bank_account_ids = fields.Many2many(
         'res.partner.bank',
         'mobikey_document_template_bank_rel',
@@ -183,6 +183,14 @@ class MobikeyDocumentTemplate(models.Model):
             'brand_height': brand_height,
             'header_height': max(23, issuer_height + 2),
         }
+
+    def _get_mobikey_accent_tint(self):
+        """Blend the configured accent with white for calm large-area fills."""
+        self.ensure_one()
+        accent = (self.accent_color or '#E9EEF4').lstrip('#')
+        components = [int(accent[index:index + 2], 16) for index in (0, 2, 4)]
+        tinted = [round(component * 0.30 + 255 * 0.70) for component in components]
+        return '#%02X%02X%02X' % tuple(tinted)
 
     @api.constrains('primary_color', 'accent_color')
     def _check_colors(self):
