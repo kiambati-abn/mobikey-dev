@@ -11,7 +11,7 @@ class ProductTemplate(models.Model):
     )
     mobikey_show_product_details = fields.Boolean(
         string='Show Detailed Specifications',
-        help='Display this product as a main product with its attributes, specifications, description, and warranty.',
+        help='Force a characteristics block even when the product has no selected variant attributes or ordered specifications.',
     )
     mobikey_quotation_description = fields.Html(
         string='Quotation Description',
@@ -105,18 +105,28 @@ class SaleOrderLine(models.Model):
     @api.depends('product_id')
     def _compute_mobikey_product_document_values(self):
         for line in self:
-            template = line.product_id.product_tmpl_id
-            line.mobikey_show_product_details = bool(
+            values = line._get_mobikey_product_document_values()
+            for field_name, value in values.items():
+                line[field_name] = value
+
+    def _get_mobikey_product_document_values(self):
+        self.ensure_one()
+        template = self.product_id.product_tmpl_id
+        return {
+            'mobikey_show_product_details': bool(
                 template and template.mobikey_show_product_details
-            )
-            line.mobikey_product_model = (
-                template.model or line.product_id.display_name
-            ) if template else False
-            line.mobikey_observation = template.description_sale if template else False
-            line.mobikey_warranty = template.mobikey_default_warranty if template else False
-            line.mobikey_quotation_description = (
+            ),
+            'mobikey_product_model': (
+                template.model or self.product_id.display_name
+            ) if template else False,
+            'mobikey_observation': template.description_sale if template else False,
+            'mobikey_warranty': (
+                template.mobikey_default_warranty if template else False
+            ),
+            'mobikey_quotation_description': (
                 template.mobikey_quotation_description if template else False
-            )
+            ),
+        }
 
     @api.depends(
         'product_id',
@@ -185,9 +195,9 @@ class SaleOrderLine(models.Model):
     def _get_mobikey_detail_rows(self):
         """Return snapshotted attribute/specification pairs in two columns."""
         self.ensure_one()
-        details = list(
-            self.mobikey_detail_snapshot or self._get_mobikey_live_details()
-        )
+        details = list(self.mobikey_detail_snapshot or [])
+        if not details and self.order_id.state == 'draft':
+            details = self._get_mobikey_live_details()
 
         half = (len(details) + 1) // 2
         return [
@@ -206,3 +216,24 @@ class SaleOrderLine(models.Model):
             False,
         )
         return first_line or self.product_id.display_name
+
+    def _get_mobikey_report_observation(self):
+        """Use live product text only while a draft snapshot is still empty."""
+        self.ensure_one()
+        if self.mobikey_observation:
+            return self.mobikey_observation
+        if self.order_id.state == 'draft' and self.product_id:
+            return self.product_id.product_tmpl_id.description_sale
+        return False
+
+    def _has_mobikey_characteristics(self):
+        """Whether this line should receive its own characteristics block."""
+        self.ensure_one()
+        return bool(
+            self.mobikey_show_product_details
+            or self.mobikey_detail_snapshot
+            or (
+                self.order_id.state == 'draft'
+                and self._get_mobikey_live_details()
+            )
+        )

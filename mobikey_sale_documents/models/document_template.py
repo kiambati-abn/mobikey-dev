@@ -73,6 +73,29 @@ class MobikeyDocumentTemplate(models.Model):
         max_height=512,
         help='Optional. When empty, the logo of the sales order company or branch is used.',
     )
+    issuer_logo_size = fields.Selection(
+        selection=[
+            ('compact', 'Compact'),
+            ('standard', 'Standard'),
+            ('large', 'Large'),
+        ],
+        string='Dealer Logo Size',
+        required=True,
+        default='standard',
+        help='Controls the maximum printed size while preserving the logo aspect ratio.',
+    )
+    manufacturer_logo_size = fields.Selection(
+        selection=[
+            ('auto', 'Automatic'),
+            ('compact', 'Compact'),
+            ('standard', 'Standard'),
+            ('large', 'Large'),
+        ],
+        string='Manufacturer Logo Size',
+        required=True,
+        default='auto',
+        help='Automatic is recommended for quotations containing multiple brands.',
+    )
     primary_color = fields.Char(required=True, default='#1A5A96')
     accent_color = fields.Char(required=True, default='#E9EEF4')
     bank_account_ids = fields.Many2many(
@@ -113,6 +136,53 @@ class MobikeyDocumentTemplate(models.Model):
         'unique(name, company_id)',
         'A document template with this name already exists for this company or branch.',
     )
+
+    def _get_mobikey_logo_dimensions(self, brand_count):
+        """Return bounded print dimensions in millimetres for reliable PDF output."""
+        self.ensure_one()
+        issuer_sizes = {
+            'compact': (45, 13),
+            'standard': (60, 17),
+            'large': (75, 21),
+        }
+        manufacturer_sizes = {
+            'compact': (30, 11),
+            'standard': (45, 15),
+            'large': (60, 19),
+        }
+        automatic_sizes = {
+            0: (45, 15),
+            1: (60, 19),
+            2: (42, 15),
+            3: (28, 12),
+        }
+
+        issuer_width, issuer_height = issuer_sizes[
+            self.issuer_logo_size or 'standard'
+        ]
+        if self.manufacturer_logo_size == 'auto':
+            brand_width, brand_height = automatic_sizes.get(brand_count, (20, 9))
+        else:
+            brand_width, brand_height = manufacturer_sizes[
+                self.manufacturer_logo_size or 'standard'
+            ]
+            if brand_count == 2:
+                brand_width = min(brand_width, 42)
+                brand_height = min(brand_height, 17)
+            elif brand_count == 3:
+                brand_width = min(brand_width, 28)
+                brand_height = min(brand_height, 13)
+            elif brand_count > 3:
+                brand_width = min(brand_width, 20)
+                brand_height = min(brand_height, 9)
+
+        return {
+            'issuer_width': issuer_width,
+            'issuer_height': issuer_height,
+            'brand_width': brand_width,
+            'brand_height': brand_height,
+            'header_height': max(23, issuer_height + 2),
+        }
 
     @api.constrains('primary_color', 'accent_color')
     def _check_colors(self):

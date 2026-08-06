@@ -84,6 +84,8 @@
                                    invisible="brand_source != 'template'"
                                    required="brand_source == 'template'"/>
                             <field name="issuer_logo" widget="image" class="oe_avatar"/>
+                            <field name="issuer_logo_size"/>
+                            <field name="manufacturer_logo_size"/>
                         </group>
                     </group>
                     <notebook>

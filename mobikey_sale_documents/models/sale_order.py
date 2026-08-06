@@ -1,5 +1,5 @@
 from odoo import api, fields, models, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Command
 
 
@@ -163,13 +163,35 @@ class SaleOrder(models.Model):
                 brands |= brand
         return brands.sorted(key=lambda brand: (brand.sequence, brand.id))
 
-    def _get_mobikey_main_product_lines(self):
+    def _get_mobikey_characteristic_product_lines(self):
+        """Return every line that has printable product characteristics."""
         self.ensure_one()
         product_lines = self._get_order_lines_to_report().filtered(
             lambda line: not line.display_type and line.product_id
         )
-        detailed_lines = product_lines.filtered('mobikey_show_product_details')
-        return detailed_lines or product_lines[:1]
+        return product_lines.filtered(
+            lambda line: line._has_mobikey_characteristics()
+        )
+
+    def _get_mobikey_main_product_lines(self):
+        """Compatibility alias for integrations using the original helper."""
+        return self._get_mobikey_characteristic_product_lines()
+
+    def action_mobikey_refresh_document_details(self):
+        non_draft_orders = self.filtered(lambda order: order.state != 'draft')
+        if non_draft_orders:
+            raise UserError(_(
+                'Product document details can only be refreshed on draft quotations.'
+            ))
+        for order in self:
+            product_lines = order.order_line.filtered(
+                lambda line: not line.display_type and line.product_id
+            )
+            for line in product_lines:
+                values = line._get_mobikey_product_document_values()
+                values['mobikey_detail_snapshot'] = line._get_mobikey_live_details()
+                line.write(values)
+        return True
 
     def _get_mobikey_issuer_location(self):
         self.ensure_one()
