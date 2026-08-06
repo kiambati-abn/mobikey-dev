@@ -351,6 +351,7 @@ class TestMobikeySaleDocuments(TransactionCase):
         )[0]
         self.assertEqual(len(header.xpath('.//img')), 3)
         self.assertNotIn(self.env.company.name, header.text_content())
+        self.assertIn('width: 50%; height: 23mm', report_html.decode())
         self.assertIn('max-width: 60mm', report_html.decode())
         self.assertIn('max-width: 42mm', report_html.decode())
         self.assertIn(b'Nairobi, Kenya', report_html)

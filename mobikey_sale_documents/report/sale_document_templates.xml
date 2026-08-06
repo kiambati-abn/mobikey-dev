@@ -56,13 +56,13 @@
             </style>
             <table class="mobikey-borderless" style="width: 100%; border-collapse: collapse;">
                 <tr>
-                    <td t-att-style="'width: 50%; height: %smm; vertical-align: middle; border: 0;' % logo_dimensions['header_height']">
+                    <td t-att-style="'width: 50%; height: ' + str(logo_dimensions['header_height']) + 'mm; vertical-align: middle; border: 0;'">
                         <img t-if="issuer_logo"
                              t-att-src="image_data_uri(issuer_logo)"
                              alt="Dealer logo"
                              t-att-style="'display: block; max-width: %smm; max-height: %smm; object-fit: contain;' % (logo_dimensions['issuer_width'], logo_dimensions['issuer_height'])"/>
                     </td>
-                    <td t-att-style="'width: 50%; height: %smm; text-align: right; vertical-align: middle; white-space: normal; border: 0;' % logo_dimensions['header_height']">
+                    <td t-att-style="'width: 50%; height: ' + str(logo_dimensions['header_height']) + 'mm; text-align: right; vertical-align: middle; white-space: normal; border: 0;'">
                         <t t-foreach="brands" t-as="brand">
                             <img t-if="brand.logo"
                                  t-att-src="image_data_uri(brand.logo)"
@@ -282,7 +282,7 @@
                             </div>
                         </td>
                         <td style="width: 3%; padding: 0;"/>
-                        <td t-att-style="'width: 51%; padding: 2mm; background: %s;' % accent_tint">
+                        <td t-att-style="'width: 51%; padding: 2mm; background: ' + accent_tint + ';'">
                             <div class="mobikey-label">Customer</div>
                             <div t-field="doc.partner_id"
                                  t-options='{"widget": "contact", "fields": ["name", "address", "phone", "email"], "no_marker": True}'/>
@@ -342,7 +342,7 @@
                                 <td class="mobikey-label" style="width: 18%; text-align: right;">
                                     OBS:
                                 </td>
-                                <td t-att-style="'width: 82%; background: %s; white-space: pre-line;' % accent_tint">
+                                <td t-att-style="'width: 82%; background: ' + accent_tint + '; white-space: pre-line;'">
                                     <span t-out="observation"/>
                                 </td>
                             </tr>
@@ -415,7 +415,7 @@
                 <div class="clearfix" style="margin-top: 1.5mm;">
                     <div style="width: 45%; float: right;">
                         <table class="table table-borderless mobikey-totals-table"
-                               t-att-style="'width: 100%; font-size: 10pt; color: %s;' % template.primary_color">
+                               t-att-style="'width: 100%; font-size: 10pt; color: ' + template.primary_color + ';'">
                             <tr t-if="doc.mobikey_discount_total">
                                 <td>Aggregate Line Discount</td>
                                 <td style="text-align: right;">
