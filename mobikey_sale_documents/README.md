@@ -10,7 +10,9 @@ templates.
 2. In **Sales > Configuration > Manufacturer Brands**, create each vehicle,
    chassis, or trailer brand and upload its logo.
 3. On each product's **Quotation Details** tab, choose its manufacturer brand,
-   add ordered specifications, a customer-facing description, and warranty.
+   mark main products, add ordered specifications, maintain the standard Sales
+   Description used for OBS, and configure default warranty terms. The existing
+   product **Model** field becomes the characteristics heading.
 4. In **Sales > Configuration > Proforma Templates**, create a template for a
    company/branch and configure its dealer logo override, manufacturer-logo
    strategy, colors, bank accounts, terms, footer, and signatories.
@@ -43,6 +45,19 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
   choices to the quotation. They remain editable on the draft quotation.
 - Product specifications, description, and warranty are snapshotted on the sales
   line so later product-master edits do not silently change an issued document.
+- The product Model heading and a variant attribute also named Model are separate;
+  both are printed when both are present.
+- Every main product prints its characteristics before one consolidated commercial
+  table. Extra products remain identifiable commercial lines without specification
+  blocks.
+- Delivery terms and the expected delivery date are independent and print together
+  when both are populated. Bank accounts are grouped by bank and currency.
+- The report header contains logos only. Issuer details are kept in a compact footer,
+  while the issuing city and country appear beside the document date.
+- For crisp PDF output, upload transparent PNG or SVG-style source artwork on an
+  approximately 1024 x 300 px canvas. The report preserves aspect ratio and caps
+  the dealer logo at 55 x 16 mm; manufacturer logos use 65 x 16 mm for one,
+  34 x 15 mm each for two, and 22 x 13 mm each for three or more. Larger sets wrap.
 - The normal Odoo report actions and mail templates are not replaced. Uninstalling
   this addon restores standard rendering without leaving rewritten report actions.
 - Bank accounts are restricted to the sales-order company/branch. Templates are

@@ -91,7 +91,7 @@ class MobikeyDocumentTemplate(models.Model):
     footer_note = fields.Html(
         translate=True,
         sanitize=True,
-        help='Optional short note shown above the company details in the footer.',
+        help='Optional short note shown with the compact company details in the footer.',
     )
     signatory_1_id = fields.Many2one('res.users', string='First Signatory')
     signatory_1_title = fields.Char(translate=True)

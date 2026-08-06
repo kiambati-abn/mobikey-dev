@@ -35,21 +35,25 @@
                 </page>
             </xpath>
 
-            <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="after">
-                <field name="mobikey_show_product_details"/>
-                <field name="mobikey_warranty" invisible="not mobikey_show_product_details"/>
-                <field name="mobikey_detail_snapshot" invisible="1"/>
-            </xpath>
-
             <xpath expr="//field[@name='order_line']/form//field[@name='name']" position="after">
-                <field name="mobikey_quotation_description"
-                       widget="html"
+                <separator string="Quotation and Proforma Details" colspan="2"/>
+                <field name="mobikey_show_product_details" readonly="parent.locked"/>
+                <field name="mobikey_product_model"
+                       readonly="parent.locked"
                        invisible="not mobikey_show_product_details"/>
+                <field name="mobikey_observation"
+                       readonly="parent.locked"
+                       invisible="not mobikey_show_product_details"
+                       placeholder="OBS copied from the product Sales Description."/>
+                <field name="mobikey_warranty"
+                       readonly="parent.locked"
+                       placeholder="Warranty terms for this specific product line."/>
+                <field name="mobikey_detail_snapshot" invisible="1"/>
             </xpath>
 
             <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_qty']" position="after">
                 <field name="mobikey_show_product_details" optional="hide"/>
-                <field name="mobikey_warranty" optional="hide"/>
+                <field name="mobikey_product_model" optional="hide"/>
             </xpath>
         </field>
     </record>
