@@ -36,9 +36,11 @@
     <template id="report_sale_document_layout">
         <t t-set="template" t-value="doc.mobikey_document_template_id"/>
         <t t-set="company" t-value="doc.company_id"/>
+        <t t-set="primary_color" t-value="template.primary_color or '#305496'"/>
+        <t t-set="accent_color" t-value="template.accent_color or '#A9D08E'"/>
         <t t-set="issuer_logo" t-value="template.issuer_logo or company.logo"/>
         <t t-set="brands" t-value="doc._get_mobikey_report_brands()"/>
-        <t t-set="accent_tint" t-value="template._get_mobikey_accent_tint()"/>
+        <t t-set="accent_tint" t-value="template._get_mobikey_accent_tint() or '#E5F1DD'"/>
         <t t-set="logo_dimensions"
            t-value="template._get_mobikey_logo_dimensions(len(brands))"/>
 
@@ -56,19 +58,19 @@
             </style>
             <table class="mobikey-borderless" style="width: 100%; border-collapse: collapse;">
                 <tr>
-                    <td t-att-style="'width: 50%; height: ' + str(logo_dimensions['header_height']) + 'mm; vertical-align: middle; border: 0;'">
+                    <td t-attf-style="width: 50%; height: #{logo_dimensions['header_height']}mm; vertical-align: middle; border: 0;">
                         <img t-if="issuer_logo"
                              t-att-src="image_data_uri(issuer_logo)"
                              alt="Dealer logo"
-                             t-att-style="'display: block; max-width: %smm; max-height: %smm; object-fit: contain;' % (logo_dimensions['issuer_width'], logo_dimensions['issuer_height'])"/>
+                             t-attf-style="display: block; max-width: #{logo_dimensions['issuer_width']}mm; max-height: #{logo_dimensions['issuer_height']}mm; object-fit: contain;"/>
                     </td>
-                    <td t-att-style="'width: 50%; height: ' + str(logo_dimensions['header_height']) + 'mm; text-align: right; vertical-align: middle; white-space: normal; border: 0;'">
+                    <td t-attf-style="width: 50%; height: #{logo_dimensions['header_height']}mm; text-align: right; vertical-align: middle; white-space: normal; border: 0;">
                         <t t-foreach="brands" t-as="brand">
                             <img t-if="brand.logo"
                                  t-att-src="image_data_uri(brand.logo)"
                                  t-att-alt="brand.name"
                                  t-att-title="brand.name"
-                                 t-att-style="'display: inline-block; max-width: %smm; max-height: %smm; margin: 0 0 1mm 2mm; object-fit: contain; vertical-align: middle;' % (logo_dimensions['brand_width'], logo_dimensions['brand_height'])"/>
+                                 t-attf-style="display: inline-block; max-width: #{logo_dimensions['brand_width']}mm; max-height: #{logo_dimensions['brand_height']}mm; margin: 0 0 1mm 2mm; object-fit: contain; vertical-align: middle;"/>
                         </t>
                     </td>
                 </tr>
@@ -128,6 +130,9 @@
     <template id="report_sale_document">
         <t t-set="doc" t-value="doc.with_context(lang=doc.partner_id.lang)"/>
         <t t-set="template" t-value="doc.mobikey_document_template_id"/>
+        <t t-set="primary_color" t-value="template.primary_color or '#305496'"/>
+        <t t-set="accent_color" t-value="template.accent_color or '#A9D08E'"/>
+        <t t-set="accent_tint" t-value="template._get_mobikey_accent_tint() or '#E5F1DD'"/>
         <t t-set="is_proforma" t-value="doc.env.context.get('proforma', False)"/>
         <t t-call="mobikey_sale_documents.report_sale_document_layout">
             <div class="page">
@@ -263,7 +268,7 @@
                 <table class="mobikey-table mobikey-borderless" style="margin-top: 2mm;">
                     <tr>
                         <td style="width: 46%; padding-left: 0;">
-                            <div t-att-style="'font-size: 13pt; line-height: 1.2; font-weight: bold; text-transform: uppercase; color: %s;' % template.primary_color">
+                            <div t-attf-style="font-size: 13pt; line-height: 1.2; font-weight: bold; text-transform: uppercase; color: #{primary_color};">
                                 <t t-if="is_proforma">Proforma Invoice</t>
                                 <t t-elif="doc.state in ('draft', 'sent')">Quotation</t>
                                 <t t-else="">Sales Order</t>
@@ -282,7 +287,7 @@
                             </div>
                         </td>
                         <td style="width: 3%; padding: 0;"/>
-                        <td t-att-style="'width: 51%; padding: 2mm; background: ' + accent_tint + ';'">
+                        <td t-attf-style="width: 51%; padding: 2mm; background: #{accent_tint};">
                             <div class="mobikey-label">Customer</div>
                             <div t-field="doc.partner_id"
                                  t-options='{"widget": "contact", "fields": ["name", "address", "phone", "email"], "no_marker": True}'/>
@@ -307,14 +312,14 @@
                 <t t-set="characteristic_lines" t-value="doc._get_mobikey_characteristic_product_lines()"/>
                 <div t-if="characteristic_lines"
                      class="mobikey-section-title"
-                     t-att-style="'background: %s; color: #FFFFFF;' % template.primary_color">
+                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
                     1. Description and Product Characteristics
                 </div>
 
                 <t t-foreach="characteristic_lines" t-as="characteristic_line">
                     <div style="margin-bottom: 4mm;">
                         <div class="mobikey-product-title"
-                             t-att-style="'color: %s; background: %s;' % (template.primary_color, accent_tint)">
+                             t-attf-style="color: #{primary_color}; background: #{accent_tint};">
                             <span t-out="characteristic_line.mobikey_product_model or characteristic_line.product_id.display_name"/>
                         </div>
                         <t t-set="detail_rows" t-value="characteristic_line._get_mobikey_detail_rows()"/>
@@ -342,7 +347,7 @@
                                 <td class="mobikey-label" style="width: 18%; text-align: right;">
                                     OBS:
                                 </td>
-                                <td t-att-style="'width: 82%; background: ' + accent_tint + '; white-space: pre-line;'">
+                                <td t-attf-style="width: 82%; background: #{accent_tint}; white-space: pre-line;">
                                     <span t-out="observation"/>
                                 </td>
                             </tr>
@@ -355,7 +360,7 @@
                 </t>
 
                 <div class="mobikey-section-title"
-                     t-att-style="'background: %s; color: #FFFFFF;' % template.primary_color">
+                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
                     2. Commercial Conditions
                 </div>
 
@@ -363,7 +368,7 @@
                 <t t-set="display_discount" t-value="any(line.discount &gt; 0 for line in commercial_lines if not line.display_type)"/>
                 <t t-set="display_taxes" t-value="any(line._has_taxes() for line in commercial_lines if not line.display_type)"/>
                 <table class="mobikey-table mobikey-commercial-table">
-                    <thead t-att-style="'background: %s;' % template.accent_color">
+                    <thead t-attf-style="background: #{accent_color};">
                         <tr>
                             <th style="text-align: left;">Description</th>
                             <th style="text-align: right; white-space: nowrap;">Quantity</th>
@@ -376,7 +381,7 @@
                     <tbody>
                         <t t-foreach="commercial_lines" t-as="line">
                             <tr t-if="line.display_type in ('line_section', 'line_subsection')"
-                                t-att-style="'font-weight: bold; color: %s;' % template.primary_color">
+                                t-attf-style="font-weight: bold; color: #{primary_color};">
                                 <td colspan="99"><span t-field="line.name"/></td>
                             </tr>
                             <tr t-elif="line.display_type == 'line_note'" style="font-style: italic;">
@@ -415,7 +420,7 @@
                 <div class="clearfix" style="margin-top: 1.5mm;">
                     <div style="width: 45%; float: right;">
                         <table class="table table-borderless mobikey-totals-table"
-                               t-att-style="'width: 100%; font-size: 10pt; color: ' + template.primary_color + ';'">
+                               t-attf-style="width: 100%; font-size: 10pt; color: #{primary_color};">
                             <tr t-if="doc.mobikey_discount_total">
                                 <td>Aggregate Line Discount</td>
                                 <td style="text-align: right;">
@@ -432,7 +437,7 @@
 
                 <div style="clear: both;"/>
                 <div class="mobikey-section-title"
-                     t-att-style="'background: %s; color: #FFFFFF;' % template.primary_color">
+                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
                     3. Payment, Delivery and Validity
                 </div>
                 <table class="mobikey-table mobikey-compact-terms mobikey-avoid-break mobikey-borderless">
@@ -459,13 +464,13 @@
 
                 <div t-if="doc.mobikey_bank_account_ids"
                      class="mobikey-section-title"
-                     t-att-style="'background: %s; color: #FFFFFF;' % template.primary_color">
+                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
                     4. Bank References
                 </div>
                 <t t-foreach="doc._get_mobikey_bank_groups()" t-as="bank_group">
                     <div class="mobikey-bank-group">
                         <table class="mobikey-table mobikey-borderless" style="table-layout: fixed;">
-                            <tr t-att-style="'background: %s;' % accent_tint">
+                            <tr t-attf-style="background: #{accent_tint};">
                                 <td style="width: 48%; border: 0;">
                                     <strong t-out="bank_group['bank_name']"/>
                                     <span t-if="bank_group['bank_city']" class="mobikey-muted">
@@ -502,7 +507,7 @@
 
                 <div t-if="not is_html_empty(doc.mobikey_terms_html) or not is_html_empty(doc.note)"
                      class="mobikey-section-title"
-                     t-att-style="'background: %s; color: #FFFFFF;' % template.primary_color">
+                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
                     5. Terms and Conditions
                 </div>
                 <div t-if="not is_html_empty(doc.mobikey_terms_html)"
@@ -513,7 +518,7 @@
                      class="mobikey-terms"/>
 
                 <div class="mobikey-section-title"
-                     t-att-style="'background: %s; color: #FFFFFF;' % template.primary_color">
+                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
                     6. Signatures
                 </div>
                 <table class="mobikey-table mobikey-avoid-break mobikey-borderless" style="margin-top: 5mm;">

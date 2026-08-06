@@ -52,51 +52,11 @@ Summary Reports
 Overview Dashboard
 """,
     "description": """
-Build powerful dashboard charts that transform complex data into clear, actionable insights.
-synconics
-BI Dashboard v19.0
-Odoo Dashboard
-dashboard
-Dashboard
-Dashboards
-Analytics
-Reporting
-Business Intelligence
-KPI Dashboard
-Metrics
-Data Visualization
-Charts
-Graphs
-Real-time Dashboard
-Performance Tracking
-Business Analytics
-Executive Dashboard
-Management Dashboard
-Strategic Planning
-Decision Making
-Data Analysis
-Insights
-Custom Dashboard
-Interactive Dashboard
-Dynamic Reports
-Drill-down Reports
-Multi-user Dashboard
-Role-based Dashboard
-Customizable Widgets
-Sales Dashboard
-Inventory Dashboard
-Financial Dashboard
-HR Dashboard
-CRM Dashboard
-Project Dashboard
-Manufacturing Dashboard
-BI Tool
-Report Builder
-Visual Analytics
-Data Dashboard
-Business Reports
-Summary Reports
-Overview Dashboard
+Synconics BI Dashboard
+======================
+
+Build powerful, interactive dashboards that transform business data into
+clear and actionable insights for reporting, KPI tracking, and analysis.
     """,
     "author": "Synconics Technologies Pvt. Ltd.",
     "website": "https://www.synconics.com",

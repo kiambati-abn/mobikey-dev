@@ -354,6 +354,7 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertIn('width: 50%; height: 23mm', report_html.decode())
         self.assertIn('max-width: 60mm', report_html.decode())
         self.assertIn('max-width: 42mm', report_html.decode())
+        self.assertIn('background: #E5F1DD', report_html.decode())
         self.assertIn(b'Nairobi, Kenya', report_html)
 
     def test_template_logo_size_and_color_choices_are_bounded(self):
