@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_product_template_form_mobikey_documents" model="ir.ui.view">
+        <field name="name">product.template.form.mobikey.documents</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//notebook" position="inside">
+                <page string="Quotation Details" name="mobikey_quotation_details">
+                    <group>
+                        <group>
+                            <field name="mobikey_document_brand_id"/>
+                            <field name="mobikey_show_product_details"/>
+                            <field name="mobikey_default_warranty"/>
+                        </group>
+                    </group>
+                    <group string="Customer-facing Description">
+                        <field name="mobikey_quotation_description" widget="html" nolabel="1"/>
+                    </group>
+                    <group string="Ordered Specifications">
+                        <field name="mobikey_specification_line_ids" nolabel="1">
+                            <list editable="bottom">
+                                <field name="sequence" widget="handle"/>
+                                <field name="name"/>
+                                <field name="value"/>
+                                <field name="unit" optional="show"/>
+                            </list>
+                        </field>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sale_order_form_mobikey_documents" model="ir.ui.view">
+        <field name="name">sale.order.form.mobikey.documents</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='payment_term_id']" position="after">
+                <field name="mobikey_document_template_id"
+                       options="{'no_create': True}"
+                       readonly="state in ['cancel', 'sale']"/>
+            </xpath>
+
+            <xpath expr="//page[@name='order_lines']" position="after">
+                <page string="Proforma Details" name="mobikey_proforma_details">
+                    <group>
+                        <group string="Commercial Document">
+                            <field name="mobikey_delivery_terms" readonly="locked"/>
+                            <field name="commitment_date" readonly="locked"/>
+                            <field name="validity_date" readonly="state in ['cancel', 'sale']"/>
+                            <field name="mobikey_discount_total" readonly="1"/>
+                        </group>
+                        <group string="Branding and Payment">
+                            <field name="mobikey_company_partner_id" invisible="1"/>
+                            <field name="mobikey_brand_ids" widget="many2many_tags" readonly="locked"/>
+                            <field name="mobikey_bank_account_ids"
+                                   widget="many2many_tags"
+                                   domain="[('partner_id', '=', mobikey_company_partner_id)]"
+                                   readonly="locked"/>
+                        </group>
+                    </group>
+                    <group string="Terms and Conditions">
+                        <field name="mobikey_terms_html" widget="html" nolabel="1" readonly="locked"/>
+                    </group>
+                </page>
+            </xpath>
+
+            <xpath expr="//field[@name='order_line']/form//field[@name='price_unit']" position="after">
+                <field name="mobikey_show_product_details"/>
+                <field name="mobikey_warranty" invisible="not mobikey_show_product_details"/>
+                <field name="mobikey_detail_snapshot" invisible="1"/>
+            </xpath>
+
+            <xpath expr="//field[@name='order_line']/form//field[@name='name']" position="after">
+                <field name="mobikey_quotation_description"
+                       widget="html"
+                       invisible="not mobikey_show_product_details"/>
+            </xpath>
+
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_qty']" position="after">
+                <field name="mobikey_show_product_details" optional="hide"/>
+                <field name="mobikey_warranty" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

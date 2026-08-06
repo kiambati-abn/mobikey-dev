@@ -1,0 +1,7 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_mobikey_document_brand_user,mobikey.document.brand user,model_mobikey_document_brand,base.group_user,1,0,0,0
+access_mobikey_document_brand_manager,mobikey.document.brand manager,model_mobikey_document_brand,sales_team.group_sale_manager,1,1,1,1
+access_mobikey_document_template_user,mobikey.document.template user,model_mobikey_document_template,base.group_user,1,0,0,0
+access_mobikey_document_template_manager,mobikey.document.template manager,model_mobikey_document_template,sales_team.group_sale_manager,1,1,1,1
+access_mobikey_product_specification_user,mobikey.product.specification user,model_mobikey_product_specification,base.group_user,1,0,0,0
+access_mobikey_product_specification_manager,mobikey.product.specification manager,model_mobikey_product_specification,sales_team.group_sale_manager,1,1,1,1
