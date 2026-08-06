@@ -39,62 +39,67 @@
         <t t-set="issuer_logo" t-value="template.issuer_logo or company.logo"/>
         <t t-set="brands" t-value="doc._get_mobikey_report_brands()"/>
         <t t-set="brand_logo_width"
-           t-value="105 if len(brands) &lt;= 2 else 210 / len(brands)"/>
+           t-value="65 if len(brands) == 1 else 34 if len(brands) == 2 else 22"/>
+        <t t-set="brand_logo_height"
+           t-value="16 if len(brands) == 1 else 15 if len(brands) == 2 else 13"/>
 
         <div t-attf-class="header o_company_#{company.id}_layout"
              style="font-family: Arial, Helvetica, sans-serif;">
             <table style="width: 100%; border-collapse: collapse;">
                 <tr>
-                    <td style="width: 34%; vertical-align: middle;">
+                    <td style="width: 50%; height: 18mm; vertical-align: middle;">
                         <img t-if="issuer_logo"
                              t-att-src="image_data_uri(issuer_logo)"
                              alt="Dealer logo"
-                             style="max-width: 210px; max-height: 68px; object-fit: contain;"/>
+                             style="display: block; max-width: 55mm; max-height: 16mm; object-fit: contain;"/>
                     </td>
-                    <td style="width: 32%; text-align: center; vertical-align: middle; font-size: 9px; line-height: 1.35;">
-                        <div t-field="company.partner_id"
-                             t-options='{"widget": "contact", "fields": ["name", "address", "phone", "email"], "no_marker": True}'/>
-                    </td>
-                    <td style="width: 34%; text-align: right; vertical-align: middle;">
+                    <td style="width: 50%; height: 18mm; text-align: right; vertical-align: middle; white-space: normal;">
                         <t t-foreach="brands" t-as="brand">
                             <img t-if="brand.logo"
                                  t-att-src="image_data_uri(brand.logo)"
                                  t-att-alt="brand.name"
                                  t-att-title="brand.name"
-                                 t-att-style="'max-width: %.0fpx; max-height: 58px; margin-left: 7px; object-fit: contain;' % brand_logo_width"/>
+                                 t-att-style="'display: inline-block; max-width: %smm; max-height: %smm; margin: 0 0 1mm 3mm; object-fit: contain; vertical-align: middle;' % (brand_logo_width, brand_logo_height)"/>
                         </t>
                     </td>
                 </tr>
             </table>
-            <div t-att-style="'border-bottom: 3px solid %s; margin-top: 6px;' % template.primary_color"/>
+            <div t-att-style="'border-bottom: 0.6mm solid %s; margin-top: 1mm;' % template.primary_color"/>
         </div>
 
         <div t-attf-class="article o_company_#{company.id}_layout"
              t-att-data-oe-model="doc and doc._name"
              t-att-data-oe-id="doc and doc.id"
              t-att-data-oe-lang="doc and doc.env.context.get('lang')"
-             style="font-family: Arial, Helvetica, sans-serif; font-size: 10px;">
+             style="font-family: Arial, Helvetica, sans-serif; font-size: 8.5pt; line-height: 1.2;">
             <t t-out="0"/>
         </div>
 
         <div t-attf-class="footer o_company_#{company.id}_layout"
-             style="font-family: Arial, Helvetica, sans-serif; font-size: 8px;">
-            <div t-att-style="'border-top: 1px solid %s; padding-top: 4px;' % template.primary_color">
+             style="font-family: Arial, Helvetica, sans-serif; font-size: 7pt; line-height: 1.15;">
+            <style>
+                .mobikey-footer-note,
+                .mobikey-footer-note p {
+                    display: inline;
+                    margin: 0;
+                    padding: 0;
+                }
+            </style>
+            <div t-att-style="'border-top: 0.3mm solid %s; padding-top: 1mm;' % template.primary_color">
                 <table style="width: 100%; border-collapse: collapse;">
                     <tr>
-                        <td style="width: 75%; vertical-align: top;">
-                            <div t-if="template.footer_note" t-field="template.footer_note"/>
+                        <td style="width: 82%; vertical-align: top;">
                             <strong t-field="company.name"/>
-                            <span t-if="company.street"> · <span t-field="company.street"/></span>
-                            <span t-if="company.street2">, <span t-field="company.street2"/></span>
-                            <span t-if="company.city"> · <span t-field="company.city"/></span>
-                            <span t-if="company.country_id"> · <span t-field="company.country_id.name"/></span>
+                            <span t-if="company.street"> · <span t-field="company.street"/></span><span t-if="company.street2">, <span t-field="company.street2"/></span><span t-if="company.zip or company.city"> · <span t-if="company.zip" t-field="company.zip"/> <span t-if="company.city" t-field="company.city"/></span><span t-if="company.country_id"> · <span t-field="company.country_id.name"/></span>
+                            <br/>
+                            <span t-if="company.phone"><span t-field="company.phone"/></span><span t-if="company.email"> · <span t-field="company.email"/></span>
                             <span t-if="company.vat">
                                 · <t t-out="company.country_id.vat_label or 'Tax ID'"/>:
                                 <span t-field="company.vat"/>
                             </span>
+                            <span t-if="template.footer_note"> · <span class="mobikey-footer-note" t-field="template.footer_note"/></span>
                         </td>
-                        <td style="width: 25%; text-align: right; vertical-align: bottom;">
+                        <td style="width: 18%; text-align: right; vertical-align: bottom; white-space: nowrap;">
                             <span t-field="doc.name"/> · Page <span class="page"/> / <span class="topage"/>
                         </td>
                     </tr>
@@ -111,9 +116,9 @@
             <div class="page">
                 <style>
                     .mobikey-section-title {
-                        padding: 5px 7px;
-                        margin: 13px 0 7px 0;
-                        font-size: 11px;
+                        padding: 1.2mm 1.5mm;
+                        margin: 3mm 0 1.5mm 0;
+                        font-size: 8.5pt;
                         font-weight: bold;
                         text-transform: uppercase;
                     }
@@ -127,8 +132,8 @@
                     }
                     .mobikey-table th,
                     .mobikey-table td {
-                        border-bottom: 1px solid #d9d9d9;
-                        padding: 4px 5px;
+                        border-bottom: 0.2mm solid #d9d9d9;
+                        padding: 1mm 1.2mm;
                         vertical-align: top;
                     }
                     .mobikey-table th {
@@ -140,12 +145,48 @@
                     .mobikey-muted {
                         color: #5f6368;
                     }
+                    .mobikey-spec-grid {
+                        width: 100%;
+                        border-collapse: collapse;
+                        table-layout: fixed;
+                    }
+                    .mobikey-spec-grid td {
+                        border: 0;
+                        border-bottom: 0.15mm solid #dedede;
+                        padding: 0.8mm 1.2mm;
+                        vertical-align: top;
+                        page-break-inside: avoid;
+                    }
+                    .mobikey-product-title {
+                        margin: 1.5mm 0 1mm 0;
+                        padding: 1mm 1.5mm;
+                        font-size: 9.5pt;
+                        font-weight: bold;
+                        page-break-after: avoid;
+                    }
+                    .mobikey-observation,
+                    .mobikey-warranty {
+                        margin-top: 1.5mm;
+                        page-break-inside: avoid;
+                        white-space: pre-line;
+                    }
+                    .mobikey-compact-terms td {
+                        padding: 0.8mm 1.2mm;
+                    }
+                    .mobikey-bank-group {
+                        margin-bottom: 2mm;
+                        page-break-inside: avoid;
+                    }
+                    .mobikey-bank-accounts td {
+                        border: 0;
+                        padding: 0.5mm 1mm;
+                    }
                 </style>
 
-                <table class="mobikey-table" style="border: 0; margin-top: 4px;">
+                <table class="mobikey-table" style="border: 0; margin-top: 1mm;">
                     <tr>
                         <td style="width: 48%; border: 0; padding-left: 0;">
-                            <div style="font-size: 15px; font-weight: bold; text-transform: uppercase;">
+                            <div style="font-size: 11pt; font-weight: bold; text-transform: uppercase;">
                                 <t t-if="is_proforma">Proforma Invoice</t>
                                 <t t-elif="doc.state in ('draft', 'sent')">Quotation</t>
                                 <t t-else="">Sales Order</t>
@@ -163,7 +204,7 @@
                                 <span class="mobikey-label">Email:</span> <span t-field="doc.user_id.email"/>
                             </div>
                         </td>
-                        <td t-att-style="'width: 52%; border: 0; padding: 8px; background: ' + template.accent_color + ';'">
+                        <td t-att-style="'width: 52%; border: 0; padding: 1.5mm; background: ' + template.accent_color + ';'">
                             <div class="mobikey-label">Customer</div>
                             <div t-field="doc.partner_id"
                                  t-options='{"widget": "contact", "fields": ["name", "address", "phone", "email"], "no_marker": True}'/>
@@ -177,7 +218,10 @@
                     </tr>
                 </table>
 
-                <div style="text-align: right; margin-top: 6px;">
+                <div style="text-align: right; margin-top: 1.5mm; line-height: 1.25;">
+                    <div t-if="doc._get_mobikey_issuer_location()">
+                        <span t-out="doc._get_mobikey_issuer_location()"/>
+                    </div>
                     <span class="mobikey-label"><t t-if="is_proforma">Issue Date</t><t t-else="">Quotation Date</t>:</span>
                     <span t-field="doc.date_order" t-options="{'widget': 'date'}"/>
                 </div>
@@ -190,12 +234,13 @@
                 </div>
 
                 <t t-foreach="main_lines" t-as="main_line">
-                    <div class="mobikey-avoid-break" style="margin-bottom: 10px;">
-                        <div t-att-style="'font-size: 12px; font-weight: bold; color: %s; margin: 5px 0;' % template.primary_color">
-                            <span t-field="main_line.product_id.display_name"/>
+                    <div style="margin-bottom: 2.5mm;">
+                        <div class="mobikey-product-title"
+                             t-att-style="'color: %s; background: %s;' % (template.primary_color, template.accent_color)">
+                            <span t-out="main_line.mobikey_product_model or main_line.product_id.display_name"/>
                         </div>
                         <t t-set="detail_rows" t-value="main_line._get_mobikey_detail_rows()"/>
-                        <table t-if="detail_rows" class="mobikey-table">
+                        <table t-if="detail_rows" class="mobikey-spec-grid">
                             <t t-foreach="detail_rows" t-as="detail_row">
                                 <tr>
                                     <td style="width: 18%; text-align: right;" class="mobikey-label">
@@ -213,13 +258,13 @@
                                 </tr>
                             </t>
                         </table>
-                        <div t-if="main_line.mobikey_quotation_description" style="margin-top: 7px;">
-                            <span class="mobikey-label">Description: </span>
-                            <span t-field="main_line.mobikey_quotation_description"/>
+                        <div t-if="main_line.mobikey_observation" class="mobikey-observation">
+                            <span class="mobikey-label">Obs: </span>
+                            <span t-out="main_line.mobikey_observation"/>
                         </div>
-                        <div t-if="main_line.mobikey_warranty" style="margin-top: 4px;">
-                            <span class="mobikey-label">Warranty: </span>
-                            <span t-field="main_line.mobikey_warranty"/>
+                        <div t-if="main_line.mobikey_warranty" class="mobikey-warranty">
+                            <span class="mobikey-label">Warranty Terms: </span>
+                            <span t-out="main_line.mobikey_warranty"/>
                         </div>
                     </div>
                 </t>
@@ -253,7 +298,7 @@
                                 <td colspan="99"><span t-field="line.name"/></td>
                             </tr>
                             <tr t-else="">
-                                <td><span t-field="line.name"/></td>
+                                <td><span t-out="line._get_mobikey_commercial_description()"/></td>
                                 <td style="text-align: right; white-space: nowrap;">
                                     <span t-field="line.product_uom_qty"/>
                                     <span t-field="line.product_uom_id"/>
@@ -282,9 +327,9 @@
                     </tbody>
                 </table>
 
-                <div class="clearfix" style="margin-top: 6px;">
+                <div class="clearfix" style="margin-top: 1.5mm;">
                     <div style="width: 45%; float: right;">
-                        <table class="table table-borderless" style="width: 100%; font-size: 10px;">
+                        <table class="table table-borderless" style="width: 100%; font-size: 8.5pt;">
                             <tr t-if="doc.mobikey_discount_total">
                                 <td>Aggregate Line Discount</td>
                                 <td style="text-align: right;">
@@ -304,24 +349,25 @@
                      t-att-style="'background: %s; border-bottom: 2px solid %s;' % (template.accent_color, template.primary_color)">
                     3. Payment, Delivery and Validity
                 </div>
-                <table class="mobikey-table mobikey-avoid-break">
+                <table class="mobikey-table mobikey-compact-terms mobikey-avoid-break">
                     <tr t-if="doc.payment_term_id">
                         <td class="mobikey-label" style="width: 26%;">Payment Conditions</td>
                         <td><span t-field="doc.payment_term_id"/></td>
                     </tr>
-                    <tr t-if="doc.mobikey_delivery_terms or doc.commitment_date">
-                        <td class="mobikey-label">Delivery</td>
-                        <td>
-                            <span t-if="doc.mobikey_delivery_terms" t-field="doc.mobikey_delivery_terms"/>
-                            <span t-elif="doc.commitment_date" t-field="doc.commitment_date" t-options="{'widget': 'date'}"/>
-                        </td>
+                    <tr t-if="doc.mobikey_delivery_terms">
+                        <td class="mobikey-label">Delivery Terms</td>
+                        <td><span t-field="doc.mobikey_delivery_terms"/></td>
+                    </tr>
+                    <tr t-if="doc.commitment_date">
+                        <td class="mobikey-label">Expected Delivery Date</td>
+                        <td><span t-field="doc.commitment_date" t-options="{'widget': 'date'}"/></td>
                     </tr>
                     <tr t-if="doc.validity_date">
                         <td class="mobikey-label"><t t-if="is_proforma">Proforma Validity</t><t t-else="">Quotation Validity</t></td>
                         <td><span t-field="doc.validity_date"/></td>
                     </tr>
                 </table>
-                <div t-if="doc.payment_term_id and not is_html_empty(doc.payment_term_id.note)" style="margin-top: 6px;">
+                <div t-if="doc.payment_term_id and not is_html_empty(doc.payment_term_id.note)" style="margin-top: 1.5mm;">
                     <span t-field="doc.payment_term_id.note"/>
                 </div>
 
@@ -330,31 +376,43 @@
                      t-att-style="'background: %s; border-bottom: 2px solid %s;' % (template.accent_color, template.primary_color)">
                     4. Bank References
                 </div>
-                <table t-if="doc.mobikey_bank_account_ids" class="mobikey-table mobikey-avoid-break">
-                    <thead t-att-style="'background: %s;' % template.accent_color">
-                        <tr>
-                            <th style="text-align: left;">Bank</th>
-                            <th style="text-align: left;">Account Holder</th>
-                            <th style="text-align: left;">Account Number</th>
-                            <th style="text-align: left;">Currency</th>
-                            <th style="text-align: left;">SWIFT/BIC</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr t-foreach="doc.mobikey_bank_account_ids.sorted(key=lambda account: (account.sequence, account.id))" t-as="account">
-                            <td>
-                                <span t-field="account.bank_id.name"/>
-                                <div t-if="account.bank_id.city" class="mobikey-muted">
-                                    <span t-field="account.bank_id.city"/>
-                                </div>
-                            </td>
-                            <td><span t-field="account.acc_holder_name"/></td>
-                            <td><span t-field="account.acc_number"/></td>
-                            <td><span t-if="account.currency_id" t-field="account.currency_id.name"/></td>
-                            <td><span t-field="account.bank_bic"/></td>
-                        </tr>
-                    </tbody>
-                </table>
+                <t t-foreach="doc._get_mobikey_bank_groups()" t-as="bank_group">
+                    <div class="mobikey-bank-group">
+                        <table class="mobikey-table" style="table-layout: fixed;">
+                            <tr t-att-style="'background: %s;' % template.accent_color">
+                                <td style="width: 48%; border: 0;">
+                                    <strong t-out="bank_group['bank_name']"/>
+                                    <span t-if="bank_group['bank_city']" class="mobikey-muted">
+                                        · <span t-out="bank_group['bank_city']"/>
+                                    </span>
+                                </td>
+                                <td style="width: 30%; border: 0;">
+                                    <span t-if="bank_group['holder_names']">
+                                        <span class="mobikey-label">Holder: </span>
+                                        <span t-out="', '.join(bank_group['holder_names'])"/>
+                                    </span>
+                                </td>
+                                <td style="width: 22%; border: 0; text-align: right;">
+                                    <span t-if="bank_group['bic']">
+                                        <span class="mobikey-label">SWIFT/BIC: </span>
+                                        <span t-out="bank_group['bic']"/>
+                                    </span>
+                                </td>
+                            </tr>
+                        </table>
+                        <table class="mobikey-bank-accounts" style="width: 100%; border-collapse: collapse;">
+                            <tr t-foreach="bank_group['accounts']" t-as="account_value">
+                                <td style="width: 48%;"/>
+                                <td style="width: 12%; font-weight: bold; text-align: right;">
+                                    <span t-out="account_value['currency'] or '—'"/>
+                                </td>
+                                <td style="width: 40%;">
+                                    <span t-out="account_value['number']"/>
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                </t>
 
                 <div t-if="not is_html_empty(doc.mobikey_terms_html) or not is_html_empty(doc.note)"
                      class="mobikey-section-title"
@@ -363,10 +421,10 @@
                 </div>
                 <div t-if="not is_html_empty(doc.mobikey_terms_html)"
                      t-field="doc.mobikey_terms_html"
-                     style="text-align: justify;"/>
+                     style="text-align: justify; font-size: 8pt; line-height: 1.15;"/>
                 <div t-elif="not is_html_empty(doc.note)"
                      t-field="doc.note"
-                     style="text-align: justify;"/>
+                     style="text-align: justify; font-size: 8pt; line-height: 1.15;"/>
 
                 <div class="mobikey-section-title"
                      t-att-style="'background: %s; border-bottom: 2px solid %s;' % (template.accent_color, template.primary_color)">

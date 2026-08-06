@@ -170,3 +170,46 @@ class SaleOrder(models.Model):
         )
         detailed_lines = product_lines.filtered('mobikey_show_product_details')
         return detailed_lines or product_lines[:1]
+
+    def _get_mobikey_issuer_location(self):
+        self.ensure_one()
+        return ', '.join(filter(None, (
+            self.company_id.city,
+            self.company_id.country_id.name,
+        )))
+
+    def _get_mobikey_bank_groups(self):
+        """Group payment accounts by bank for a compact multi-currency layout."""
+        self.ensure_one()
+        grouped_accounts = {}
+        bank_order = []
+        accounts = self.mobikey_bank_account_ids.sorted(
+            key=lambda account: (account.sequence, account.id)
+        )
+        for account in accounts:
+            key = account.bank_id.id or 0
+            if key not in grouped_accounts:
+                grouped_accounts[key] = self.env['res.partner.bank']
+                bank_order.append(key)
+            grouped_accounts[key] |= account
+
+        groups = []
+        for key in bank_order:
+            bank_accounts = grouped_accounts[key]
+            bank = bank_accounts[:1].bank_id
+            holder_names = list(dict.fromkeys(filter(
+                None,
+                bank_accounts.mapped('acc_holder_name'),
+            )))
+            groups.append({
+                'bank': bank,
+                'bank_name': bank.name if bank else _('Bank not specified'),
+                'bank_city': bank.city if bank else False,
+                'bic': bank_accounts[:1].bank_bic,
+                'holder_names': holder_names,
+                'accounts': [{
+                    'currency': account.currency_id.name or '',
+                    'number': account.acc_number,
+                } for account in bank_accounts],
+            })
+        return groups

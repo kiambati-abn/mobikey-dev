@@ -11,11 +11,13 @@
                         <group>
                             <field name="mobikey_document_brand_id"/>
                             <field name="mobikey_show_product_details"/>
-                            <field name="mobikey_default_warranty"/>
+                            <field name="mobikey_default_warranty" placeholder="e.g. 2 years or 200,000 km, whichever comes first"/>
                         </group>
                     </group>
-                    <group string="Customer-facing Description">
-                        <field name="mobikey_quotation_description" widget="html" nolabel="1"/>
+                    <group string="OBS (Product Sales Description)">
+                        <field name="description_sale"
+                               nolabel="1"
+                               placeholder="Customer-facing observation printed below the main-product characteristics."/>
                     </group>
                     <group string="Ordered Specifications">
                         <field name="mobikey_specification_line_ids" nolabel="1">

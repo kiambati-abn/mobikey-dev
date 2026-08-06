@@ -19,8 +19,8 @@ class ProductTemplate(models.Model):
         sanitize=True,
         help='Customer-facing description printed after the product specifications.',
     )
-    mobikey_default_warranty = fields.Char(
-        string='Default Warranty',
+    mobikey_default_warranty = fields.Text(
+        string='Default Warranty Terms',
         translate=True,
         help='Default warranty copied to new sales order lines.',
     )
@@ -59,8 +59,26 @@ class SaleOrderLine(models.Model):
         readonly=False,
         precompute=True,
     )
-    mobikey_warranty = fields.Char(
-        string='Warranty',
+    mobikey_product_model = fields.Char(
+        string='Document Model',
+        compute='_compute_mobikey_product_document_values',
+        store=True,
+        readonly=False,
+        precompute=True,
+        copy=True,
+        help='Product model snapshotted for the document characteristics heading.',
+    )
+    mobikey_observation = fields.Text(
+        string='OBS / Sales Description',
+        compute='_compute_mobikey_product_document_values',
+        store=True,
+        readonly=False,
+        precompute=True,
+        copy=True,
+        help='Product Sales Description snapshotted for the OBS section.',
+    )
+    mobikey_warranty = fields.Text(
+        string='Warranty Terms',
         compute='_compute_mobikey_product_document_values',
         store=True,
         readonly=False,
@@ -91,6 +109,10 @@ class SaleOrderLine(models.Model):
             line.mobikey_show_product_details = bool(
                 template and template.mobikey_show_product_details
             )
+            line.mobikey_product_model = (
+                template.model or line.product_id.display_name
+            ) if template else False
+            line.mobikey_observation = template.description_sale if template else False
             line.mobikey_warranty = template.mobikey_default_warranty if template else False
             line.mobikey_quotation_description = (
                 template.mobikey_quotation_description if template else False
@@ -175,3 +197,12 @@ class SaleOrderLine(models.Model):
             )
             for index in range(half)
         ]
+
+    def _get_mobikey_commercial_description(self):
+        """Return the identifying first line without the appended Sales Description."""
+        self.ensure_one()
+        first_line = next(
+            (line.strip() for line in (self.name or '').splitlines() if line.strip()),
+            False,
+        )
+        return first_line or self.product_id.display_name
