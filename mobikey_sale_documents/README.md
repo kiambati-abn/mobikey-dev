@@ -72,8 +72,9 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
   empty margins, ideally around 1024 x 300 px for a wide logo. The report never
   stretches or crops the image.
 - Printed body text uses a readable 10 pt baseline, borderless two-column product
-  characteristics, a shaded OBS row, 9 pt terms, and an 8.5 pt borderless company
-  footer. The layout prioritizes readability over forcing content onto two pages.
+  characteristics with faint alternating rows, a shaded OBS block, 9 pt terms,
+  and a 9.5 pt borderless company footer. The layout prioritizes readability over
+  forcing content onto two pages.
 - Primary color is used for high-contrast section hierarchy and the accent color
   for smaller highlights. A pale accent tint is generated automatically for larger
   customer, product, OBS, and bank backgrounds so the page does not become visually

@@ -349,9 +349,14 @@ class TestMobikeySaleDocuments(TransactionCase):
         header = tree.xpath(
             "//div[contains(concat(' ', normalize-space(@class), ' '), ' header ')]"
         )[0]
+        footer = tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' footer ')]"
+        )[0]
         self.assertEqual(len(header.xpath('.//img')), 3)
+        self.assertFalse(header.xpath('.//table'))
+        self.assertFalse(footer.xpath('.//table'))
         self.assertNotIn(self.env.company.name, header.text_content())
-        self.assertIn('width: 50%; height: 23mm', report_html.decode())
+        self.assertIn('height: 23mm; line-height: 23mm', report_html.decode())
         self.assertIn('max-width: 60mm', report_html.decode())
         self.assertIn('max-width: 42mm', report_html.decode())
         self.assertIn('background: #E5F1DD', report_html.decode())
@@ -376,6 +381,33 @@ class TestMobikeySaleDocuments(TransactionCase):
             self.document_template._get_mobikey_accent_tint(),
             '#E5F1DD',
         )
+        self.assertEqual(
+            self.document_template._get_mobikey_accent_stripe(),
+            '#F2F8EE',
+        )
+
+    def test_characteristic_rows_are_borderless_and_faintly_striped(self):
+        self.env['mobikey.product.specification'].create({
+            'product_tmpl_id': self.product_template.id,
+            'sequence': 30,
+            'name': 'Wheelbase',
+            'value': '3900',
+            'unit': 'mm',
+        })
+        order = self._create_order()
+
+        report_html, _report_type = self.env['ir.actions.report']._render_qweb_html(
+            'sale.action_report_saleorder',
+            order.ids,
+        )
+        tree = lxml_html.fromstring(report_html)
+        rows = tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-spec-row ')]"
+        )
+        self.assertEqual(len(rows), 2)
+        self.assertIn('background: #FFFFFF', rows[0].attrib['style'])
+        self.assertIn('background: #F2F8EE', rows[1].attrib['style'])
+        self.assertFalse(tree.xpath("//div[contains(@class, 'mobikey-spec-grid')]//table"))
 
     def test_native_report_renders_custom_dispatch(self):
         order = self._create_order()
@@ -395,7 +427,8 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertIn('font-size: 10pt; line-height: 1.3', rendered_html)
         self.assertIn('background: #305496; color: #FFFFFF', rendered_html)
         self.assertIn('background: #E5F1DD', rendered_html)
-        self.assertIn('mobikey-borderless', rendered_html)
+        self.assertIn('mobikey-spec-row', rendered_html)
+        self.assertIn('font-size: 9.5pt; line-height: 1.25', rendered_html)
 
         proforma_html, proforma_report_type = (
             self.env['ir.actions.report']._render_qweb_html(

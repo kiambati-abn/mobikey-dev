@@ -192,6 +192,14 @@ class MobikeyDocumentTemplate(models.Model):
         tinted = [round(component * 0.30 + 255 * 0.70) for component in components]
         return '#%02X%02X%02X' % tuple(tinted)
 
+    def _get_mobikey_accent_stripe(self):
+        """Return an extra-light accent tint for alternating specification rows."""
+        self.ensure_one()
+        accent = (self.accent_color or '#E9EEF4').lstrip('#')
+        components = [int(accent[index:index + 2], 16) for index in (0, 2, 4)]
+        tinted = [round(component * 0.15 + 255 * 0.85) for component in components]
+        return '#%02X%02X%02X' % tuple(tinted)
+
     @api.constrains('primary_color', 'accent_color')
     def _check_colors(self):
         for template in self:
