@@ -305,6 +305,13 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertIn(b'Delivery Terms', report_html)
         self.assertIn(b'Within three months', report_html)
         self.assertIn(b'Expected Delivery Date', report_html)
+        tree = lxml_html.fromstring(report_html)
+        rows = tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-payment-row ')]"
+        )
+        self.assertGreaterEqual(len(rows), 2)
+        self.assertIn('background: #FFFFFF', rows[0].attrib['style'])
+        self.assertIn('background: #F2F8EE', rows[1].attrib['style'])
 
     def test_bank_accounts_are_grouped_by_bank_and_currency(self):
         euro_account = self.env['res.partner.bank'].create({
@@ -326,6 +333,21 @@ class TestMobikeySaleDocuments(TransactionCase):
             [account['currency'] for account in groups[0]['accounts']],
             ['USD', 'EUR'],
         )
+
+        report_html, _report_type = self.env['ir.actions.report']._render_qweb_html(
+            'sale.action_report_saleorder',
+            order.ids,
+        )
+        self.assertIn(b'Account Numbers', report_html)
+        self.assertIn(b'Account Holder:', report_html)
+        self.assertIn(b'MOBIKEY-DOCUMENT-TEST', report_html)
+        self.assertIn(b'MOBIKEY-EUR-TEST', report_html)
+        tree = lxml_html.fromstring(report_html)
+        bank_groups = tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-bank-group ')]"
+        )
+        self.assertEqual(len(bank_groups), 1)
+        self.assertFalse(bank_groups[0].xpath('.//table'))
 
     def test_header_contains_only_logos_and_uses_multi_brand_sizes(self):
         second_brand = self.env['mobikey.document.brand'].create({
