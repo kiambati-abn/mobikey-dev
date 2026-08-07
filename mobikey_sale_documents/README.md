@@ -61,7 +61,9 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
   without document details remain identifiable only in the consolidated commercial
   table.
 - Delivery terms and the expected delivery date are independent and print together
-  when both are populated. Bank accounts are grouped by bank and currency.
+  when both are populated. Payment details use a readable striped 30/70 layout.
+  Bank accounts use a 42/58 bank-information and account-number layout and remain
+  grouped by bank and currency without repeating the bank name.
 - The report header contains logos only. Issuer details are kept in a compact footer,
   while the issuing city and country appear beside the document date.
 - Dealer and manufacturer logo sizes are selectable on each document template.

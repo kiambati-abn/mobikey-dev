@@ -199,8 +199,8 @@
                     .mobikey-party-row,
                     .mobikey-spec-row,
                     .mobikey-observation,
-                    .mobikey-compact-row,
-                    .mobikey-bank-heading,
+                    .mobikey-payment-row,
+                    .mobikey-bank-group,
                     .mobikey-bank-account-row,
                     .mobikey-signature-row {
                         width: 100%;
@@ -313,36 +313,42 @@
                     .mobikey-section-start {
                         page-break-inside: avoid;
                     }
-                    .mobikey-compact-row {
-                        padding: 1mm 1.4mm;
-                        line-height: 1.3;
+                    .mobikey-payment-section {
+                        margin-bottom: 3mm;
                     }
-                    .mobikey-compact-label,
-                    .mobikey-compact-value {
+                    .mobikey-payment-row {
+                        padding: 1.35mm 1.8mm;
+                        line-height: 1.3;
+                        page-break-inside: avoid;
+                    }
+                    .mobikey-payment-label,
+                    .mobikey-payment-value {
                         display: inline-block;
                         box-sizing: border-box;
                         vertical-align: top;
-                        font-size: 10pt;
+                        font-size: 10.5pt;
                         border: 0 !important;
                     }
-                    .mobikey-compact-label {
-                        width: 26%;
+                    .mobikey-payment-label {
+                        width: 30%;
                         font-weight: bold;
                     }
-                    .mobikey-compact-value {
-                        width: 74%;
+                    .mobikey-payment-value {
+                        width: 70%;
+                    }
+                    .mobikey-bank-section {
+                        padding-top: 2mm;
                     }
                     .mobikey-bank-group {
+                        padding: 1.8mm;
                         margin-bottom: 3mm;
                         page-break-inside: avoid;
                     }
-                    .mobikey-bank-heading {
-                        padding: 1.1mm 1.4mm;
-                    }
+                    .mobikey-bank-meta,
+                    .mobikey-bank-accounts,
                     .mobikey-bank-name,
-                    .mobikey-bank-holder,
-                    .mobikey-bank-bic,
-                    .mobikey-bank-account-spacer,
+                    .mobikey-bank-detail,
+                    .mobikey-bank-accounts-title,
                     .mobikey-bank-account-currency,
                     .mobikey-bank-account-number {
                         display: inline-block;
@@ -351,28 +357,44 @@
                         font-size: 10pt;
                         border: 0 !important;
                     }
-                    .mobikey-bank-name,
-                    .mobikey-bank-account-spacer {
-                        width: 48%;
+                    .mobikey-bank-meta {
+                        width: 42%;
+                        padding-right: 4mm;
                     }
-                    .mobikey-bank-holder {
-                        width: 30%;
+                    .mobikey-bank-accounts {
+                        width: 58%;
                     }
-                    .mobikey-bank-bic {
-                        width: 22%;
-                        text-align: right;
+                    .mobikey-bank-name {
+                        display: block;
+                        margin-bottom: 1mm;
+                        font-size: 11pt;
+                        font-weight: bold;
+                    }
+                    .mobikey-bank-detail {
+                        display: block;
+                        margin-bottom: 0.6mm;
+                        line-height: 1.25;
+                    }
+                    .mobikey-bank-accounts-title {
+                        display: block;
+                        margin-bottom: 0.8mm;
+                        font-size: 9.75pt;
+                        font-weight: bold;
+                        text-transform: uppercase;
                     }
                     .mobikey-bank-account-row {
-                        padding: 0.8mm 1.2mm;
+                        padding: 0.7mm 0;
+                        line-height: 1.25;
                     }
                     .mobikey-bank-account-currency {
-                        width: 12%;
-                        padding-right: 1.2mm;
-                        text-align: right;
+                        width: 20%;
+                        padding-right: 2mm;
                         font-weight: bold;
                     }
                     .mobikey-bank-account-number {
-                        width: 40%;
+                        width: 80%;
+                        font-size: 10.5pt;
+                        white-space: nowrap;
                     }
                     .mobikey-totals-table td {
                         border: 0 !important;
@@ -598,76 +620,76 @@
                 </div>
 
                 <div style="clear: both;"/>
-                <div class="mobikey-section-start">
+                <t t-set="payment_rows" t-value="([('payment', 'Payment Conditions')] if doc.payment_term_id else []) + ([('delivery_terms', 'Delivery Terms')] if doc.mobikey_delivery_terms else []) + ([('delivery_date', 'Expected Delivery Date')] if doc.commitment_date else []) + ([('validity', 'Proforma Validity' if is_proforma else 'Quotation Validity')] if doc.validity_date else [])"/>
+                <div class="mobikey-section-start mobikey-payment-section">
                     <div class="mobikey-section-title"
                          t-attf-style="background: #{primary_color}; color: #FFFFFF;">
                         3. Payment, Delivery and Validity
                     </div>
-                    <div t-if="doc.payment_term_id" class="mobikey-compact-row">
-                        <div class="mobikey-compact-label">Payment Conditions</div>
-                        <div class="mobikey-compact-value"><span t-field="doc.payment_term_id"/></div>
-                    </div>
-                    <div t-if="doc.mobikey_delivery_terms" class="mobikey-compact-row">
-                        <div class="mobikey-compact-label">Delivery Terms</div>
-                        <div class="mobikey-compact-value"><span t-field="doc.mobikey_delivery_terms"/></div>
-                    </div>
-                    <div t-if="doc.commitment_date" class="mobikey-compact-row">
-                        <div class="mobikey-compact-label">Expected Delivery Date</div>
-                        <div class="mobikey-compact-value">
-                            <span t-field="doc.commitment_date" t-options="{'widget': 'date'}"/>
+                    <t t-foreach="payment_rows" t-as="payment_row">
+                        <div class="mobikey-payment-row"
+                             t-attf-style="background: #{accent_stripe if payment_row_index % 2 else '#FFFFFF'};">
+                            <div class="mobikey-payment-label">
+                                <span t-out="payment_row[1]"/>
+                            </div>
+                            <div class="mobikey-payment-value">
+                                <span t-if="payment_row[0] == 'payment'" t-field="doc.payment_term_id"/>
+                                <span t-elif="payment_row[0] == 'delivery_terms'" t-field="doc.mobikey_delivery_terms"/>
+                                <span t-elif="payment_row[0] == 'delivery_date'"
+                                      t-field="doc.commitment_date"
+                                      t-options="{'widget': 'date'}"/>
+                                <span t-else="" t-field="doc.validity_date"/>
+                            </div>
                         </div>
-                    </div>
-                    <div t-if="doc.validity_date" class="mobikey-compact-row">
-                        <div class="mobikey-compact-label">
-                            <t t-if="is_proforma">Proforma Validity</t><t t-else="">Quotation Validity</t>
-                        </div>
-                        <div class="mobikey-compact-value"><span t-field="doc.validity_date"/></div>
-                    </div>
+                    </t>
                 </div>
                 <div t-if="doc.payment_term_id and not is_html_empty(doc.payment_term_id.note)" style="margin-top: 1.5mm;">
                     <span t-field="doc.payment_term_id.note"/>
                 </div>
 
-                <div t-if="doc.mobikey_bank_account_ids"
-                     class="mobikey-section-title"
-                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
-                    4. Bank References
-                </div>
-                <t t-foreach="doc._get_mobikey_bank_groups()" t-as="bank_group">
-                    <div class="mobikey-bank-group">
-                        <div class="mobikey-bank-heading" t-attf-style="background: #{accent_tint};">
-                            <div class="mobikey-bank-name">
-                                <strong t-out="bank_group['bank_name']"/>
-                                <span t-if="bank_group['bank_city']" class="mobikey-muted">
-                                    · <span t-out="bank_group['bank_city']"/>
-                                </span>
-                            </div>
-                            <div class="mobikey-bank-holder">
-                                <span t-if="bank_group['holder_names']">
-                                    <span class="mobikey-label">Holder: </span>
+                <t t-set="bank_groups" t-value="doc._get_mobikey_bank_groups()"/>
+                <div t-if="bank_groups" class="mobikey-bank-section">
+                    <div class="mobikey-section-title"
+                         t-attf-style="background: #{primary_color}; color: #FFFFFF;">
+                        4. Bank References
+                    </div>
+                    <t t-foreach="bank_groups" t-as="bank_group">
+                        <div class="mobikey-bank-group" t-attf-style="background: #{accent_stripe};">
+                            <div class="mobikey-bank-meta">
+                                <div class="mobikey-bank-name" t-attf-style="color: #{primary_color};">
+                                    <span t-out="bank_group['bank_name']"/>
+                                </div>
+                                <div t-if="bank_group['holder_names']" class="mobikey-bank-detail">
+                                    <span class="mobikey-label">Account Holder: </span>
                                     <span t-out="', '.join(bank_group['holder_names'])"/>
-                                </span>
-                            </div>
-                            <div class="mobikey-bank-bic">
-                                <span t-if="bank_group['bic']">
+                                </div>
+                                <div t-if="bank_group['bic']" class="mobikey-bank-detail">
                                     <span class="mobikey-label">SWIFT/BIC: </span>
                                     <span t-out="bank_group['bic']"/>
-                                </span>
+                                </div>
+                                <div t-if="bank_group['bank_city']" class="mobikey-bank-detail">
+                                    <span class="mobikey-label">Branch / City: </span>
+                                    <span t-out="bank_group['bank_city']"/>
+                                </div>
+                            </div>
+                            <div class="mobikey-bank-accounts">
+                                <div class="mobikey-bank-accounts-title" t-attf-style="color: #{primary_color};">
+                                    Account Numbers
+                                </div>
+                                <div t-foreach="bank_group['accounts']"
+                                     t-as="account_value"
+                                     class="mobikey-bank-account-row">
+                                    <div class="mobikey-bank-account-currency" t-attf-style="color: #{primary_color};">
+                                        <span t-out="account_value['currency'] or '—'"/>
+                                    </div>
+                                    <div class="mobikey-bank-account-number">
+                                        <span t-out="account_value['number']"/>
+                                    </div>
+                                </div>
                             </div>
                         </div>
-                        <div t-foreach="bank_group['accounts']"
-                             t-as="account_value"
-                             class="mobikey-bank-account-row">
-                            <div class="mobikey-bank-account-spacer"/>
-                            <div class="mobikey-bank-account-currency">
-                                <span t-out="account_value['currency'] or '—'"/>
-                            </div>
-                            <div class="mobikey-bank-account-number">
-                                <span t-out="account_value['number']"/>
-                            </div>
-                        </div>
-                    </div>
-                </t>
+                    </t>
+                </div>
 
                 <div t-if="not is_html_empty(doc.mobikey_terms_html) or not is_html_empty(doc.note)"
                      class="mobikey-section-title"
