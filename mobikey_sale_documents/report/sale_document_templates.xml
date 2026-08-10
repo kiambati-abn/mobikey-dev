@@ -301,7 +301,7 @@
                     -webkit-transform-origin: center center;
                     transform-origin: center center;
                 }
-                .mobikey-report-page {
+                .mobikey-report-content-watermarked {
                     position: relative;
                     z-index: 1;
                 }
@@ -381,6 +381,7 @@
         <t t-set="primary_foreground" t-value="palette['primary_foreground']"/>
         <t t-set="light_foreground" t-value="palette['light_foreground']"/>
         <t t-set="is_proforma" t-value="doc.env.context.get('proforma', False)"/>
+        <t t-set="watermark_text" t-value="doc._get_mobikey_watermark_text()"/>
         <t t-call="mobikey_sale_documents.report_sale_document_layout">
             <div class="page mobikey-report-page">
                 <style>
@@ -391,12 +392,16 @@
                         line-height: 1.2;
                         font-weight: bold;
                         text-transform: uppercase;
-                        page-break-after: avoid;
-                        break-after: avoid-page;
+                        page-break-after: avoid !important;
+                        break-after: avoid-page !important;
                     }
                     .mobikey-section-lead {
-                        page-break-inside: avoid;
-                        break-inside: avoid-page;
+                        display: inline-block;
+                        width: 100%;
+                        box-sizing: border-box;
+                        vertical-align: top;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid-page !important;
                     }
                     .mobikey-label {
                         font-weight: bold;
@@ -450,7 +455,8 @@
                     .mobikey-spec-row {
                         padding: 0.85mm 0;
                         line-height: 1.3;
-                        page-break-inside: avoid;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid-page !important;
                     }
                     .mobikey-spec-cell {
                         display: inline-block;
@@ -491,13 +497,15 @@
                         font-size: 11.25pt;
                         line-height: 1.2;
                         font-weight: bold;
-                        page-break-after: avoid;
-                        break-after: avoid-page;
+                        page-break-after: avoid !important;
+                        break-after: avoid-page !important;
                     }
                     .mobikey-warranty {
                         margin-top: 2.2mm;
                         page-break-inside: avoid;
                         white-space: pre-line;
+                        orphans: 3;
+                        widows: 3;
                     }
                     .mobikey-observation {
                         width: 100%;
@@ -526,6 +534,8 @@
                     .mobikey-observation-value {
                         width: 82%;
                         white-space: normal;
+                        orphans: 3;
+                        widows: 3;
                     }
                     .mobikey-commercial-table,
                     .mobikey-commercial-table thead,
@@ -559,12 +569,19 @@
                         page-break-inside: avoid;
                     }
                     .mobikey-payment-section {
+                        display: inline-block;
+                        width: 100%;
+                        box-sizing: border-box;
                         margin-bottom: 3mm;
+                        vertical-align: top;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid-page !important;
                     }
                     .mobikey-payment-row {
                         padding: 1.35mm 1.8mm;
                         line-height: 1.3;
-                        page-break-inside: avoid;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid-page !important;
                     }
                     .mobikey-payment-label,
                     .mobikey-payment-value {
@@ -587,7 +604,8 @@
                     .mobikey-bank-group {
                         padding: 1.8mm;
                         margin-bottom: 3mm;
-                        page-break-inside: avoid;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid-page !important;
                     }
                     .mobikey-bank-meta,
                     .mobikey-bank-accounts,
@@ -650,9 +668,37 @@
                         color: inherit !important;
                         font-weight: bold !important;
                     }
+                    .mobikey-totals-block {
+                        width: 45%;
+                        margin: 1.5mm 0 0 55%;
+                        box-sizing: border-box;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid-page !important;
+                    }
+                    .mobikey-commercial-item,
+                    .mobikey-commercial-section,
+                    .mobikey-commercial-note {
+                        page-break-inside: avoid !important;
+                        break-inside: avoid-page !important;
+                    }
+                    .mobikey-terms-title {
+                        page-break-after: avoid !important;
+                        break-after: avoid-page !important;
+                    }
+                    .mobikey-terms-content,
+                    .mobikey-terms-content &gt; :first-child,
+                    .mobikey-payment-note {
+                        orphans: 3;
+                        widows: 3;
+                    }
+                    .mobikey-terms-content &gt; :first-child {
+                        page-break-before: avoid !important;
+                        break-before: avoid-page !important;
+                    }
                     .mobikey-signature-row {
                         margin-top: 5mm;
-                        page-break-inside: avoid;
+                        page-break-inside: avoid !important;
+                        break-inside: avoid-page !important;
                     }
                     .mobikey-signature-column {
                         display: inline-block;
@@ -671,6 +717,8 @@
                         padding-top: 3px;
                     }
                 </style>
+
+                <div t-attf-class="mobikey-report-content#{' mobikey-report-content-watermarked' if watermark_text else ''}">
 
                 <div class="mobikey-party-row" style="margin-top: 2mm;">
                     <div class="mobikey-party-column" style="width: 46%; padding-left: 0;">
@@ -763,25 +811,22 @@
                     </tbody>
                 </table>
 
-                <div class="clearfix" style="margin-top: 1.5mm;">
-                    <div style="width: 45%; float: right;">
-                        <table class="table table-borderless mobikey-totals-table"
-                               t-attf-style="width: 100%; font-size: 10pt; color: #{primary_color}; font-weight: bold;">
-                            <tr t-if="doc.mobikey_discount_total">
-                                <td>Aggregate Line Discount</td>
-                                <td style="text-align: right;">
-                                    <span t-field="doc.mobikey_discount_total"/>
-                                </td>
-                            </tr>
-                            <t t-call="sale.document_tax_totals">
-                                <t t-set="tax_totals" t-value="doc.tax_totals"/>
-                                <t t-set="currency" t-value="doc.currency_id"/>
-                            </t>
-                        </table>
-                    </div>
+                <div class="mobikey-totals-block">
+                    <table class="table table-borderless mobikey-totals-table"
+                           t-attf-style="width: 100%; font-size: 10pt; color: #{primary_color}; font-weight: bold;">
+                        <tr t-if="doc.mobikey_discount_total">
+                            <td>Aggregate Line Discount</td>
+                            <td style="text-align: right;">
+                                <span t-field="doc.mobikey_discount_total"/>
+                            </td>
+                        </tr>
+                        <t t-call="sale.document_tax_totals">
+                            <t t-set="tax_totals" t-value="doc.tax_totals"/>
+                            <t t-set="currency" t-value="doc.currency_id"/>
+                        </t>
+                    </table>
                 </div>
 
-                <div style="clear: both;"/>
                 <t t-set="payment_rows" t-value="([('payment', 'Payment Conditions')] if doc.payment_term_id else []) + ([('delivery_terms', 'Delivery Terms')] if doc.mobikey_delivery_terms else []) + ([('delivery_date', 'Expected Delivery Date')] if doc.commitment_date else []) + ([('validity', 'Proforma Validity' if is_proforma else 'Quotation Validity')] if doc.validity_date else [])"/>
                 <div t-if="payment_rows" class="mobikey-payment-section">
                     <t t-call="mobikey_sale_documents.report_section_lead">
@@ -798,7 +843,9 @@
                         <t t-call="mobikey_sale_documents.report_payment_row"/>
                     </t>
                 </div>
-                <div t-if="doc.payment_term_id and not is_html_empty(doc.payment_term_id.note)" style="margin-top: 1.5mm;">
+                <div t-if="doc.payment_term_id and not is_html_empty(doc.payment_term_id.note)"
+                     class="mobikey-payment-note"
+                     style="margin-top: 1.5mm;">
                     <span t-field="doc.payment_term_id.note"/>
                 </div>
 
@@ -818,12 +865,13 @@
                 </div>
 
                 <div t-if="not is_html_empty(doc.note)"
-                     class="mobikey-section-title"
+                     class="mobikey-section-title mobikey-terms-title"
                      t-attf-style="background: #{primary_color}; color: #{primary_foreground};">
                     5. Terms and Conditions
                 </div>
                 <span t-if="not is_html_empty(doc.note)"
                       t-field="doc.note"
+                      class="mobikey-terms-content"
                       t-attf-style="#{'text-align:justify;text-justify:inter-word;' if doc.company_id.terms_type != 'html' else ''}"
                       name="order_note"/>
 
@@ -878,6 +926,7 @@
                         </div>
                     </div>
                 </t>
+                </div>
             </div>
         </t>
     </template>

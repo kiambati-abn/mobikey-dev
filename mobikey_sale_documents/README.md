@@ -95,8 +95,10 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
   overrides use safe neutral or generated fallbacks, and foreground text is selected
   for contrast on configurable colored backgrounds.
 - Structured section headings are grouped with only their first meaningful content
-  block. Native terms retain Odoo's own flowing HTML rather than being split or
-  re-serialized by the branded report.
+  block. The short Payment, Delivery and Validity section and commercial totals
+  stay together as complete print blocks. Native terms retain Odoo's own flowing
+  HTML rather than being split or re-serialized by the branded report, with widow
+  and orphan protection for page transitions.
 - Optional template watermarks use a restrained diagonal text layer behind the
   body on every page. The setting is snapshotted onto the quotation when the
   template is selected. It applies only to the custom Mobikey layout; native Odoo
