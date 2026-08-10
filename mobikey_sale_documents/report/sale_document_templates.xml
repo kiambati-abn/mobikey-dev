@@ -445,16 +445,6 @@
                         text-transform: uppercase;
                         white-space: nowrap;
                     }
-                    .mobikey-issuer-summary {
-                        margin-top: 2.5mm;
-                        font-size: 9pt;
-                        line-height: 1.25;
-                    }
-                    .mobikey-issuer-summary .mobikey-label {
-                        display: block;
-                        margin-bottom: 0.5mm;
-                        text-transform: uppercase;
-                    }
                     .mobikey-spec-grid {
                         width: 100%;
                         border: 0 !important;
@@ -761,22 +751,6 @@
                         </div>
                         <div t-if="doc.user_id.email">
                             <span class="mobikey-label">Email:</span> <span t-field="doc.user_id.email"/>
-                        </div>
-                        <div class="mobikey-issuer-summary">
-                            <span class="mobikey-label" t-attf-style="color: #{primary_color};">Issued By</span>
-                            <div>
-                                <strong t-field="doc.company_id.name"/>
-                                <span t-if="doc.company_id.vat">
-                                    · <t t-out="doc.company_id.country_id.vat_label or 'Tax ID'"/>:
-                                    <span t-field="doc.company_id.vat"/>
-                                </span>
-                            </div>
-                            <div t-if="doc.company_id.street or doc.company_id.street2 or doc.company_id.zip or doc.company_id.city or doc.company_id.country_id">
-                                <span t-if="doc.company_id.street" t-field="doc.company_id.street"/><span t-if="doc.company_id.street2">, <span t-field="doc.company_id.street2"/></span><span t-if="doc.company_id.zip or doc.company_id.city"> · <span t-if="doc.company_id.zip" t-field="doc.company_id.zip"/> <span t-if="doc.company_id.city" t-field="doc.company_id.city"/></span><span t-if="doc.company_id.country_id"> · <span t-field="doc.company_id.country_id.name"/></span>
-                            </div>
-                            <div t-if="doc.company_id.phone or doc.company_id.email">
-                                <span t-if="doc.company_id.phone" t-field="doc.company_id.phone"/><span t-if="doc.company_id.email"> · <span t-field="doc.company_id.email"/></span>
-                            </div>
                         </div>
                     </div>
                     <div class="mobikey-party-column" style="width: 3%;"/>

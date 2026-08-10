@@ -432,9 +432,10 @@ class TestMobikeySaleDocuments(TransactionCase):
         article = tree.xpath(
             "//div[contains(concat(' ', normalize-space(@class), ' '), ' article ')]"
         )[0]
-        self.assertIn('Issued By', article.text_content())
-        self.assertIn('Nairobi', article.text_content())
-        self.assertIn('Kenya', article.text_content())
+        self.assertNotIn('Issued By', article.text_content())
+        self.assertFalse(article.xpath(
+            ".//*[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-issuer-summary ')]"
+        ))
         self.assertIn('Nairobi', footer.text_content())
         self.assertIn('Kenya', footer.text_content())
 

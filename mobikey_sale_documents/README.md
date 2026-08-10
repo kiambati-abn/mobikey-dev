@@ -76,9 +76,8 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
   grouped by bank and currency without repeating the bank name.
 - The report header contains logos only. The document summary lists the reference,
   quotation/proforma date, optional validity date, customer reference, and
-  salesperson in that order. A compact **Issued By** block repeats the issuer's
-  legal and contact identity on the first page so it is not available only in the
-  repeating footer.
+  salesperson in that order. Issuer legal and contact details remain in the
+  protected repeating footer rather than adding a duplicate first-page block.
 - Dealer and manufacturer logo sizes are selectable on each document template.
   Manufacturer **Automatic** sizing is recommended because it caps and wraps
   mixed-brand headers safely. Compact, Standard, and Large options preserve each
