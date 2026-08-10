@@ -419,6 +419,10 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertEqual(len(header.xpath('.//img')), 3)
         self.assertFalse(header.xpath('.//table'))
         self.assertFalse(footer.xpath('.//table'))
+        self.assertIn('min-height: 24mm', footer.attrib['style'])
+        self.assertIn('line-height: 1.35', footer.attrib['style'])
+        footer_content = footer.xpath('./div')[0]
+        self.assertIn('padding-top: 3.5mm', footer_content.attrib['style'])
         self.assertNotIn(self.env.company.name, header.text_content())
         self.assertIn('height: 23mm; line-height: 23mm', report_html.decode())
         self.assertIn('max-width: 60mm', report_html.decode())
@@ -691,7 +695,10 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertIn('background: #E5F1DD', rendered_html)
         self.assertIn('mobikey-spec-row', rendered_html)
         self.assertIn('font-size: 10pt; line-height: 1.3', rendered_html)
-        self.assertIn('border-top: 0.35mm solid #305496', rendered_html)
+        self.assertIn(
+            'border-top: 0.35mm solid #305496; padding-top: 3.5mm',
+            rendered_html,
+        )
 
         proforma_html, proforma_report_type = (
             self.env['ir.actions.report']._render_qweb_html(
