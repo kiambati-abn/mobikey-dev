@@ -95,11 +95,32 @@
                     <notebook>
                         <page string="Appearance" name="appearance">
                             <group>
-                                <group>
-                                    <field name="primary_color" placeholder="#305496"/>
-                                    <field name="accent_color" placeholder="#A9D08E"/>
+                                <group string="Color Scheme">
+                                    <field name="color_scheme"/>
+                                    <button name="action_restore_color_scheme_defaults"
+                                            type="object"
+                                            string="Restore Scheme Defaults"
+                                            icon="fa-undo"
+                                            class="btn-secondary"
+                                            invisible="color_scheme == 'custom'"/>
+                                    <field name="primary_color" widget="color"/>
+                                    <field name="accent_color" widget="color"/>
                                 </group>
-                                <group>
+                                <group string="Optional Color Overrides">
+                                    <field name="body_text_color" widget="color"/>
+                                    <field name="muted_text_color" widget="color"/>
+                                    <field name="light_background_color" widget="color"/>
+                                </group>
+                            </group>
+                            <group string="Palette Preview">
+                                <field name="palette_preview"
+                                       widget="html"
+                                       readonly="1"
+                                       nolabel="1"
+                                       colspan="2"/>
+                            </group>
+                            <group>
+                                <group string="Footer Note">
                                     <field name="footer_note" widget="html"/>
                                 </group>
                             </group>

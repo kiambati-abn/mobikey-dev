@@ -33,14 +33,199 @@
         </xpath>
     </template>
 
+    <template id="report_section_lead">
+        <div class="mobikey-section-lead">
+            <t t-out="0"/>
+        </div>
+    </template>
+
+    <template id="report_specification_row">
+        <div class="mobikey-spec-row"
+             t-attf-style="background: #{accent_stripe if detail_row_index % 2 else '#FFFFFF'};">
+            <div class="mobikey-spec-cell">
+                <span class="mobikey-spec-label">
+                    <t t-out="detail_row[0]['label']"/>
+                </span>
+                <span class="mobikey-spec-value">
+                    <t t-out="detail_row[0]['value']"/>
+                </span>
+            </div>
+            <div class="mobikey-spec-cell">
+                <span class="mobikey-spec-label">
+                    <t t-if="detail_row[1]" t-out="detail_row[1]['label']"/>
+                </span>
+                <span class="mobikey-spec-value">
+                    <t t-if="detail_row[1]" t-out="detail_row[1]['value']"/>
+                </span>
+            </div>
+        </div>
+    </template>
+
+    <template id="report_product_observation">
+        <div class="mobikey-observation"
+             t-attf-style="background: #{light_background};">
+            <div class="mobikey-observation-label">OBS:</div>
+            <div class="mobikey-observation-value">
+                <span t-out="observation"/>
+            </div>
+        </div>
+    </template>
+
+    <template id="report_product_characteristics">
+        <t t-set="detail_rows" t-value="characteristic_line._get_mobikey_detail_rows()"/>
+        <t t-set="observation" t-value="characteristic_line._get_mobikey_report_observation()"/>
+        <t t-call="mobikey_sale_documents.report_section_lead">
+            <div t-if="product_section_title"
+                 class="mobikey-section-title"
+                 t-attf-style="background: #{primary_color}; color: #{primary_foreground};">
+                <t t-out="product_section_title"/>
+            </div>
+            <div class="mobikey-product-title"
+                 t-attf-style="color: #{light_foreground}; background: #{light_background};">
+                <span t-out="characteristic_line.mobikey_product_model or characteristic_line.product_id.display_name"/>
+            </div>
+            <div t-if="detail_rows" class="mobikey-spec-grid">
+                <t t-set="detail_row" t-value="detail_rows[0]"/>
+                <t t-set="detail_row_index" t-value="0"/>
+                <t t-call="mobikey_sale_documents.report_specification_row"/>
+            </div>
+            <t t-elif="observation" t-call="mobikey_sale_documents.report_product_observation"/>
+            <div t-elif="characteristic_line.mobikey_warranty" class="mobikey-warranty">
+                <span class="mobikey-label">Warranty Terms: </span>
+                <span t-out="characteristic_line.mobikey_warranty"/>
+            </div>
+        </t>
+        <div t-if="detail_rows[1:]" class="mobikey-spec-grid">
+            <t t-foreach="detail_rows[1:]" t-as="detail_row">
+                <t t-set="detail_row_index" t-value="detail_row_index + 1"/>
+                <t t-call="mobikey_sale_documents.report_specification_row"/>
+            </t>
+        </div>
+        <t t-if="observation and detail_rows"
+           t-call="mobikey_sale_documents.report_product_observation"/>
+        <div t-if="characteristic_line.mobikey_warranty and (detail_rows or observation)"
+             class="mobikey-warranty">
+            <span class="mobikey-label">Warranty Terms: </span>
+            <span t-out="characteristic_line.mobikey_warranty"/>
+        </div>
+    </template>
+
+    <template id="report_commercial_line">
+        <tr t-if="line.display_type in ('line_section', 'line_subsection')"
+            class="mobikey-commercial-section"
+            t-attf-style="font-weight: bold; color: #{primary_color};">
+            <td colspan="99"><span t-field="line.name"/></td>
+        </tr>
+        <tr t-elif="line.display_type == 'line_note'"
+            class="mobikey-commercial-note"
+            t-attf-style="font-style: italic; color: #{muted_color};">
+            <td colspan="99"><span t-field="line.name"/></td>
+        </tr>
+        <tr t-else=""
+            class="mobikey-commercial-item"
+            t-attf-style="background: #{accent_stripe if commercial_line_index % 2 else '#FFFFFF'}; border-bottom: 0.1mm solid #{separator_color};">
+            <td class="mobikey-commercial-description">
+                <span t-out="line._get_mobikey_commercial_description()"/>
+            </td>
+            <td class="mobikey-number">
+                <span t-field="line.product_uom_qty"/>
+                <span t-field="line.product_uom_id"/>
+            </td>
+            <td class="mobikey-number">
+                <span t-if="line.discount &lt; 0"
+                      t-out="(1 - line.discount / 100.0) * line.price_unit"
+                      t-options="{'widget': 'monetary', 'display_currency': doc.currency_id}"/>
+                <span t-else=""
+                      t-out="line.price_unit"
+                      t-options="{'widget': 'monetary', 'display_currency': doc.currency_id}"/>
+            </td>
+            <td t-if="display_discount" class="mobikey-number">
+                <span t-if="line.discount" t-field="line.discount"/>
+            </td>
+            <td t-if="display_taxes" class="mobikey-number">
+                <t t-out="', '.join(tax.tax_label for tax in line.tax_ids if tax.tax_label)"/>
+            </td>
+            <td class="mobikey-number">
+                <span t-if="doc.company_price_include == 'tax_included'"
+                      t-field="line.price_total"/>
+                <span t-else="" t-field="line.price_subtotal"/>
+            </td>
+        </tr>
+    </template>
+
+    <template id="report_commercial_columns">
+        <colgroup>
+            <col t-attf-style="width: #{40 + (0 if display_discount else 8) + (0 if display_taxes else 10)}%;"/>
+            <col style="width: 12%;"/>
+            <col style="width: 15%;"/>
+            <col t-if="display_discount" style="width: 8%;"/>
+            <col t-if="display_taxes" style="width: 10%;"/>
+            <col style="width: 15%;"/>
+        </colgroup>
+    </template>
+
+    <template id="report_payment_row">
+        <div class="mobikey-payment-row"
+             t-attf-style="background: #{accent_stripe if payment_row_index % 2 else '#FFFFFF'};">
+            <div class="mobikey-payment-label">
+                <span t-out="payment_row[1]"/>
+            </div>
+            <div class="mobikey-payment-value">
+                <span t-if="payment_row[0] == 'payment'" t-field="doc.payment_term_id"/>
+                <span t-elif="payment_row[0] == 'delivery_terms'" t-field="doc.mobikey_delivery_terms"/>
+                <span t-elif="payment_row[0] == 'delivery_date'"
+                      t-field="doc.commitment_date"
+                      t-options="{'widget': 'date'}"/>
+                <span t-else="" t-field="doc.validity_date"/>
+            </div>
+        </div>
+    </template>
+
+    <template id="report_bank_group">
+        <div class="mobikey-bank-group" t-attf-style="background: #{accent_stripe};">
+            <div class="mobikey-bank-meta">
+                <div class="mobikey-bank-name" t-attf-style="color: #{primary_color};">
+                    <span t-out="bank_group['bank_name']"/>
+                </div>
+                <div t-if="bank_group['holder_names']" class="mobikey-bank-detail">
+                    <span class="mobikey-label">Account Holder: </span>
+                    <span t-out="', '.join(bank_group['holder_names'])"/>
+                </div>
+                <div t-if="bank_group['bic']" class="mobikey-bank-detail">
+                    <span class="mobikey-label">SWIFT/BIC: </span>
+                    <span t-out="bank_group['bic']"/>
+                </div>
+                <div t-if="bank_group['bank_city']" class="mobikey-bank-detail">
+                    <span class="mobikey-label">Branch / City: </span>
+                    <span t-out="bank_group['bank_city']"/>
+                </div>
+            </div>
+            <div class="mobikey-bank-accounts">
+                <div class="mobikey-bank-accounts-title" t-attf-style="color: #{primary_color};">
+                    Account Numbers
+                </div>
+                <div t-foreach="bank_group['accounts']"
+                     t-as="account_value"
+                     class="mobikey-bank-account-row">
+                    <div class="mobikey-bank-account-currency" t-attf-style="color: #{primary_color};">
+                        <span t-out="account_value['currency'] or '—'"/>
+                    </div>
+                    <div class="mobikey-bank-account-number">
+                        <span t-out="account_value['number']"/>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </template>
+
     <template id="report_sale_document_layout">
         <t t-set="template" t-value="doc.mobikey_document_template_id"/>
         <t t-set="company" t-value="doc.company_id"/>
-        <t t-set="primary_color" t-value="template.primary_color or '#305496'"/>
-        <t t-set="accent_color" t-value="template.accent_color or '#A9D08E'"/>
+        <t t-set="palette" t-value="template._get_mobikey_palette()"/>
+        <t t-set="primary_color" t-value="palette['primary']"/>
+        <t t-set="body_color" t-value="palette['body']"/>
         <t t-set="issuer_logo" t-value="template.issuer_logo or company.logo"/>
         <t t-set="brands" t-value="doc._get_mobikey_report_brands()"/>
-        <t t-set="accent_tint" t-value="template._get_mobikey_accent_tint() or '#E5F1DD'"/>
         <t t-set="logo_dimensions"
            t-value="template._get_mobikey_logo_dimensions(len(brands))"/>
 
@@ -91,12 +276,12 @@
              t-att-data-oe-model="doc and doc._name"
              t-att-data-oe-id="doc and doc.id"
              t-att-data-oe-lang="doc and doc.env.context.get('lang')"
-             style="font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.3;">
+             t-attf-style="font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.3; color: #{body_color};">
             <t t-out="0"/>
         </div>
 
         <div t-attf-class="footer o_company_#{company.id}_layout"
-             style="font-family: Arial, Helvetica, sans-serif; font-size: 9.5pt; line-height: 1.25; border: 0 !important; outline: 0 !important; box-shadow: none !important;">
+             t-attf-style="min-height: 22mm; padding-top: 4mm; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.3; color: #{body_color}; border: 0 !important; outline: 0 !important; box-shadow: none !important;">
             <style>
                 .mobikey-footer-note,
                 .mobikey-footer-note p {
@@ -122,19 +307,19 @@
                 }
                 .mobikey-footer-details {
                     width: 78%;
-                    font-size: 9.5pt;
+                    font-size: 10pt;
                 }
                 .mobikey-footer-page {
                     width: 22%;
-                    font-size: 9pt;
+                    font-size: 9.5pt;
                     text-align: right;
                     white-space: nowrap;
                 }
             </style>
-            <div style="padding-top: 1mm;">
+            <div t-attf-style="border-top: 0.35mm solid #{primary_color}; padding-top: 2.25mm;">
                 <div class="mobikey-footer-row">
                     <div class="mobikey-footer-details">
-                        <strong style="font-size: 10pt;" t-field="company.name"/>
+                        <strong style="font-size: 10.5pt;" t-field="company.name"/>
                         <span t-if="company.street"> · <span t-field="company.street"/></span><span t-if="company.street2">, <span t-field="company.street2"/></span><span t-if="company.zip or company.city"> · <span t-if="company.zip" t-field="company.zip"/> <span t-if="company.city" t-field="company.city"/></span><span t-if="company.country_id"> · <span t-field="company.country_id.name"/></span>
                         <br/>
                         <span t-if="company.phone"><span t-field="company.phone"/></span><span t-if="company.email"> · <span t-field="company.email"/></span>
@@ -155,10 +340,16 @@
     <template id="report_sale_document">
         <t t-set="doc" t-value="doc.with_context(lang=doc.partner_id.lang)"/>
         <t t-set="template" t-value="doc.mobikey_document_template_id"/>
-        <t t-set="primary_color" t-value="template.primary_color or '#305496'"/>
-        <t t-set="accent_color" t-value="template.accent_color or '#A9D08E'"/>
-        <t t-set="accent_tint" t-value="template._get_mobikey_accent_tint() or '#E5F1DD'"/>
-        <t t-set="accent_stripe" t-value="template._get_mobikey_accent_stripe() or '#F2F8EE'"/>
+        <t t-set="palette" t-value="template._get_mobikey_palette()"/>
+        <t t-set="primary_color" t-value="palette['primary']"/>
+        <t t-set="accent_color" t-value="palette['accent']"/>
+        <t t-set="body_color" t-value="palette['body']"/>
+        <t t-set="muted_color" t-value="palette['muted']"/>
+        <t t-set="light_background" t-value="palette['light_background']"/>
+        <t t-set="accent_stripe" t-value="palette['stripe']"/>
+        <t t-set="separator_color" t-value="palette['separator']"/>
+        <t t-set="primary_foreground" t-value="palette['primary_foreground']"/>
+        <t t-set="light_foreground" t-value="palette['light_foreground']"/>
         <t t-set="is_proforma" t-value="doc.env.context.get('proforma', False)"/>
         <t t-call="mobikey_sale_documents.report_sale_document_layout">
             <div class="page">
@@ -172,6 +363,10 @@
                         text-transform: uppercase;
                         page-break-after: avoid;
                         break-after: avoid-page;
+                    }
+                    .mobikey-section-lead {
+                        page-break-inside: avoid;
+                        break-inside: avoid-page;
                     }
                     .mobikey-label {
                         font-weight: bold;
@@ -194,7 +389,7 @@
                         page-break-inside: avoid;
                     }
                     .mobikey-muted {
-                        color: #5f6368;
+                        color: inherit;
                     }
                     .mobikey-party-row,
                     .mobikey-spec-row,
@@ -304,11 +499,23 @@
                     }
                     .mobikey-commercial-table thead th {
                         border: 0 !important;
-                        border-bottom: 0.25mm solid #777777 !important;
                     }
-                    .mobikey-commercial-table tbody td {
+                    .mobikey-commercial-table .mobikey-commercial-item td {
                         border: 0 !important;
-                        border-bottom: 0.1mm solid #e8e8e8 !important;
+                    }
+                    .mobikey-commercial-table .mobikey-commercial-section td,
+                    .mobikey-commercial-table .mobikey-commercial-note td {
+                        border: 0 !important;
+                        background: #FFFFFF !important;
+                    }
+                    .mobikey-commercial-description {
+                        text-align: left;
+                        white-space: normal;
+                        overflow-wrap: anywhere;
+                    }
+                    .mobikey-number {
+                        text-align: right;
+                        white-space: nowrap;
                     }
                     .mobikey-section-start {
                         page-break-inside: avoid;
@@ -399,11 +606,11 @@
                     .mobikey-totals-table td {
                         border: 0 !important;
                         padding: 0.7mm 1mm !important;
-                        color: #111827 !important;
                     }
                     .mobikey-totals-table tr.o_total td,
                     .mobikey-totals-table tr.o_total strong {
                         color: inherit !important;
+                        font-weight: bold !important;
                     }
                     .mobikey-terms {
                         font-size: 9pt;
@@ -449,17 +656,25 @@
 
                 <div class="mobikey-party-row" style="margin-top: 2mm;">
                     <div class="mobikey-party-column" style="width: 46%; padding-left: 0;">
-                        <div t-attf-style="font-size: 13pt; line-height: 1.2; font-weight: bold; text-transform: uppercase; color: #{primary_color};">
+                        <div t-attf-style="display: inline-block; margin-bottom: 1mm; padding-bottom: 0.8mm; border-bottom: 0.5mm solid #{accent_color}; font-size: 13pt; line-height: 1.2; font-weight: bold; text-transform: uppercase; color: #{primary_color};">
                             <t t-if="is_proforma">Proforma Invoice</t>
                             <t t-elif="doc.state in ('draft', 'sent')">Quotation</t>
                             <t t-else="">Sales Order</t>
                         </div>
                         <div><span class="mobikey-label">Reference:</span> <span t-field="doc.name"/></div>
+                        <div>
+                            <span class="mobikey-label"><t t-if="is_proforma">Proforma Date</t><t t-else="">Quotation Date</t>:</span>
+                            <span t-field="doc.date_order" t-options="{'widget': 'date'}"/>
+                        </div>
+                        <div t-if="doc.validity_date">
+                            <span class="mobikey-label">Validity Date:</span>
+                            <span t-field="doc.validity_date"/>
+                        </div>
                         <div t-if="doc.client_order_ref">
                             <span class="mobikey-label">Customer Reference:</span>
                             <span t-field="doc.client_order_ref"/>
                         </div>
-                        <div><span class="mobikey-label">Salesperson:</span> <span t-field="doc.user_id"/></div>
+                        <div t-if="doc.user_id"><span class="mobikey-label">Salesperson:</span> <span t-field="doc.user_id"/></div>
                         <div t-if="doc.user_id.phone">
                             <span class="mobikey-label">Mobile:</span> <span t-field="doc.user_id.phone"/>
                         </div>
@@ -469,7 +684,7 @@
                     </div>
                     <div class="mobikey-party-column" style="width: 3%;"/>
                     <div class="mobikey-party-column"
-                         t-attf-style="width: 51%; padding: 2mm; background: #{accent_tint};">
+                         t-attf-style="width: 51%; padding: 2mm; color: #{light_foreground}; background: #{light_background};">
                         <div class="mobikey-label">Customer</div>
                         <div t-field="doc.partner_id"
                              t-options='{"widget": "contact", "fields": ["name", "address", "phone", "email"], "no_marker": True}'/>
@@ -482,121 +697,50 @@
                     </div>
                 </div>
 
-                <div style="text-align: right; margin-top: 3mm; line-height: 1.3;">
-                    <div t-if="doc._get_mobikey_issuer_location()">
-                        <span t-out="doc._get_mobikey_issuer_location()"/>
-                    </div>
-                    <span class="mobikey-label"><t t-if="is_proforma">Issue Date</t><t t-else="">Quotation Date</t>:</span>
-                    <span t-field="doc.date_order" t-options="{'widget': 'date'}"/>
-                </div>
-
                 <t t-set="characteristic_lines" t-value="doc._get_mobikey_characteristic_product_lines()"/>
-                <div t-if="characteristic_lines"
-                     class="mobikey-section-title"
-                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
-                    1. Description and Product Characteristics
-                </div>
-
                 <t t-foreach="characteristic_lines" t-as="characteristic_line">
                     <div style="margin-bottom: 4mm;">
-                        <div class="mobikey-product-title"
-                             t-attf-style="color: #{primary_color}; background: #{accent_tint};">
-                            <span t-out="characteristic_line.mobikey_product_model or characteristic_line.product_id.display_name"/>
-                        </div>
-                        <t t-set="detail_rows" t-value="characteristic_line._get_mobikey_detail_rows()"/>
-                        <div t-if="detail_rows" class="mobikey-spec-grid">
-                            <t t-foreach="detail_rows" t-as="detail_row">
-                                <div class="mobikey-spec-row"
-                                     t-attf-style="background: #{accent_stripe if detail_row_index % 2 else '#FFFFFF'};">
-                                    <div class="mobikey-spec-cell">
-                                        <span class="mobikey-spec-label">
-                                            <t t-out="detail_row[0]['label']"/>
-                                        </span>
-                                        <span class="mobikey-spec-value">
-                                            <t t-out="detail_row[0]['value']"/>
-                                        </span>
-                                    </div>
-                                    <div class="mobikey-spec-cell">
-                                        <span class="mobikey-spec-label">
-                                            <t t-if="detail_row[1]" t-out="detail_row[1]['label']"/>
-                                        </span>
-                                        <span class="mobikey-spec-value">
-                                            <t t-if="detail_row[1]" t-out="detail_row[1]['value']"/>
-                                        </span>
-                                    </div>
-                                </div>
-                            </t>
-                        </div>
-                        <t t-set="observation" t-value="characteristic_line._get_mobikey_report_observation()"/>
-                        <div t-if="observation"
-                             class="mobikey-observation"
-                             t-attf-style="background: #{accent_tint};">
-                            <div class="mobikey-observation-label">OBS:</div>
-                            <div class="mobikey-observation-value">
-                                <span t-out="observation"/>
-                            </div>
-                        </div>
-                        <div t-if="characteristic_line.mobikey_warranty" class="mobikey-warranty">
-                            <span class="mobikey-label">Warranty Terms: </span>
-                            <span t-out="characteristic_line.mobikey_warranty"/>
-                        </div>
+                        <t t-set="product_section_title"
+                           t-value="'1. Description and Product Characteristics' if characteristic_line_first else False"/>
+                        <t t-call="mobikey_sale_documents.report_product_characteristics"/>
                     </div>
                 </t>
-
-                <div class="mobikey-section-title"
-                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
-                    2. Commercial Conditions
-                </div>
 
                 <t t-set="commercial_lines" t-value="doc._get_order_lines_to_report()"/>
                 <t t-set="display_discount" t-value="any(line.discount &gt; 0 for line in commercial_lines if not line.display_type)"/>
                 <t t-set="display_taxes" t-value="any(line._has_taxes() for line in commercial_lines if not line.display_type)"/>
-                <table class="mobikey-table mobikey-commercial-table">
-                    <thead t-attf-style="background: #{accent_color};">
-                        <tr>
-                            <th style="text-align: left;">Description</th>
-                            <th style="text-align: right; white-space: nowrap;">Quantity</th>
-                            <th style="text-align: right; white-space: nowrap;">Unit Price</th>
-                            <th t-if="display_discount" style="text-align: right;">Disc.%</th>
-                            <th t-if="display_taxes" style="text-align: right;">Taxes</th>
-                            <th style="text-align: right; white-space: nowrap;">Amount</th>
-                        </tr>
-                    </thead>
+                <t t-call="mobikey_sale_documents.report_section_lead">
+                    <div class="mobikey-section-title"
+                         t-attf-style="background: #{primary_color}; color: #{primary_foreground};">
+                        2. Commercial Conditions
+                    </div>
+                    <table class="mobikey-table mobikey-commercial-table">
+                        <t t-call="mobikey_sale_documents.report_commercial_columns"/>
+                        <thead t-attf-style="background: #{light_background}; color: #{light_foreground}; border-bottom: 0.1mm solid #{separator_color};">
+                            <tr>
+                                <th style="text-align: left;">Description</th>
+                                <th class="mobikey-number">Quantity</th>
+                                <th class="mobikey-number">Unit Price</th>
+                                <th t-if="display_discount" class="mobikey-number">Disc.%</th>
+                                <th t-if="display_taxes" class="mobikey-number">Taxes</th>
+                                <th class="mobikey-number">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody t-if="commercial_lines">
+                            <t t-set="line" t-value="commercial_lines[0]"/>
+                            <t t-set="commercial_line_index" t-value="0"/>
+                            <t t-call="mobikey_sale_documents.report_commercial_line"/>
+                        </tbody>
+                    </table>
+                </t>
+                <table t-if="commercial_lines[1:]"
+                       class="mobikey-table mobikey-commercial-table mobikey-commercial-continuation">
+                    <t t-call="mobikey_sale_documents.report_commercial_columns"/>
                     <tbody>
-                        <t t-foreach="commercial_lines" t-as="line">
-                            <tr t-if="line.display_type in ('line_section', 'line_subsection')"
-                                t-attf-style="font-weight: bold; color: #{primary_color};">
-                                <td colspan="99"><span t-field="line.name"/></td>
-                            </tr>
-                            <tr t-elif="line.display_type == 'line_note'" style="font-style: italic;">
-                                <td colspan="99"><span t-field="line.name"/></td>
-                            </tr>
-                            <tr t-else="">
-                                <td><span t-out="line._get_mobikey_commercial_description()"/></td>
-                                <td style="text-align: right; white-space: nowrap;">
-                                    <span t-field="line.product_uom_qty"/>
-                                    <span t-field="line.product_uom_id"/>
-                                </td>
-                                <td style="text-align: right; white-space: nowrap;">
-                                    <span t-if="line.discount &lt; 0"
-                                          t-out="(1 - line.discount / 100.0) * line.price_unit"
-                                          t-options="{'widget': 'monetary', 'display_currency': doc.currency_id}"/>
-                                    <span t-else=""
-                                          t-out="line.price_unit"
-                                          t-options="{'widget': 'monetary', 'display_currency': doc.currency_id}"/>
-                                </td>
-                                <td t-if="display_discount" style="text-align: right;">
-                                    <span t-if="line.discount" t-field="line.discount"/>
-                                </td>
-                                <td t-if="display_taxes" style="text-align: right;">
-                                    <t t-out="', '.join(tax.tax_label for tax in line.tax_ids if tax.tax_label)"/>
-                                </td>
-                                <td style="text-align: right; white-space: nowrap;">
-                                    <span t-if="doc.company_price_include == 'tax_included'"
-                                          t-field="line.price_total"/>
-                                    <span t-else="" t-field="line.price_subtotal"/>
-                                </td>
-                            </tr>
+                        <t t-foreach="commercial_lines[1:]" t-as="line">
+                            <t t-set="commercial_line_index"
+                               t-value="sum(1 for previous_line in commercial_lines[:line_index + 1] if not previous_line.display_type)"/>
+                            <t t-call="mobikey_sale_documents.report_commercial_line"/>
                         </t>
                     </tbody>
                 </table>
@@ -604,7 +748,7 @@
                 <div class="clearfix" style="margin-top: 1.5mm;">
                     <div style="width: 45%; float: right;">
                         <table class="table table-borderless mobikey-totals-table"
-                               t-attf-style="width: 100%; font-size: 10pt; color: #{primary_color};">
+                               t-attf-style="width: 100%; font-size: 10pt; color: #{primary_color}; border-top: 0.35mm solid #{separator_color}; font-weight: bold;">
                             <tr t-if="doc.mobikey_discount_total">
                                 <td>Aggregate Line Discount</td>
                                 <td style="text-align: right;">
@@ -621,26 +765,19 @@
 
                 <div style="clear: both;"/>
                 <t t-set="payment_rows" t-value="([('payment', 'Payment Conditions')] if doc.payment_term_id else []) + ([('delivery_terms', 'Delivery Terms')] if doc.mobikey_delivery_terms else []) + ([('delivery_date', 'Expected Delivery Date')] if doc.commitment_date else []) + ([('validity', 'Proforma Validity' if is_proforma else 'Quotation Validity')] if doc.validity_date else [])"/>
-                <div class="mobikey-section-start mobikey-payment-section">
-                    <div class="mobikey-section-title"
-                         t-attf-style="background: #{primary_color}; color: #FFFFFF;">
-                        3. Payment, Delivery and Validity
-                    </div>
-                    <t t-foreach="payment_rows" t-as="payment_row">
-                        <div class="mobikey-payment-row"
-                             t-attf-style="background: #{accent_stripe if payment_row_index % 2 else '#FFFFFF'};">
-                            <div class="mobikey-payment-label">
-                                <span t-out="payment_row[1]"/>
-                            </div>
-                            <div class="mobikey-payment-value">
-                                <span t-if="payment_row[0] == 'payment'" t-field="doc.payment_term_id"/>
-                                <span t-elif="payment_row[0] == 'delivery_terms'" t-field="doc.mobikey_delivery_terms"/>
-                                <span t-elif="payment_row[0] == 'delivery_date'"
-                                      t-field="doc.commitment_date"
-                                      t-options="{'widget': 'date'}"/>
-                                <span t-else="" t-field="doc.validity_date"/>
-                            </div>
+                <div t-if="payment_rows" class="mobikey-payment-section">
+                    <t t-call="mobikey_sale_documents.report_section_lead">
+                        <div class="mobikey-section-title"
+                             t-attf-style="background: #{primary_color}; color: #{primary_foreground};">
+                            3. Payment, Delivery and Validity
                         </div>
+                        <t t-set="payment_row" t-value="payment_rows[0]"/>
+                        <t t-set="payment_row_index" t-value="0"/>
+                        <t t-call="mobikey_sale_documents.report_payment_row"/>
+                    </t>
+                    <t t-foreach="payment_rows[1:]" t-as="payment_row">
+                        <t t-set="payment_row_index" t-value="payment_row_index + 1"/>
+                        <t t-call="mobikey_sale_documents.report_payment_row"/>
                     </t>
                 </div>
                 <div t-if="doc.payment_term_id and not is_html_empty(doc.payment_term_id.note)" style="margin-top: 1.5mm;">
@@ -649,109 +786,82 @@
 
                 <t t-set="bank_groups" t-value="doc._get_mobikey_bank_groups()"/>
                 <div t-if="bank_groups" class="mobikey-bank-section">
-                    <div class="mobikey-section-title"
-                         t-attf-style="background: #{primary_color}; color: #FFFFFF;">
-                        4. Bank References
-                    </div>
-                    <t t-foreach="bank_groups" t-as="bank_group">
-                        <div class="mobikey-bank-group" t-attf-style="background: #{accent_stripe};">
-                            <div class="mobikey-bank-meta">
-                                <div class="mobikey-bank-name" t-attf-style="color: #{primary_color};">
-                                    <span t-out="bank_group['bank_name']"/>
-                                </div>
-                                <div t-if="bank_group['holder_names']" class="mobikey-bank-detail">
-                                    <span class="mobikey-label">Account Holder: </span>
-                                    <span t-out="', '.join(bank_group['holder_names'])"/>
-                                </div>
-                                <div t-if="bank_group['bic']" class="mobikey-bank-detail">
-                                    <span class="mobikey-label">SWIFT/BIC: </span>
-                                    <span t-out="bank_group['bic']"/>
-                                </div>
-                                <div t-if="bank_group['bank_city']" class="mobikey-bank-detail">
-                                    <span class="mobikey-label">Branch / City: </span>
-                                    <span t-out="bank_group['bank_city']"/>
-                                </div>
-                            </div>
-                            <div class="mobikey-bank-accounts">
-                                <div class="mobikey-bank-accounts-title" t-attf-style="color: #{primary_color};">
-                                    Account Numbers
-                                </div>
-                                <div t-foreach="bank_group['accounts']"
-                                     t-as="account_value"
-                                     class="mobikey-bank-account-row">
-                                    <div class="mobikey-bank-account-currency" t-attf-style="color: #{primary_color};">
-                                        <span t-out="account_value['currency'] or '—'"/>
-                                    </div>
-                                    <div class="mobikey-bank-account-number">
-                                        <span t-out="account_value['number']"/>
-                                    </div>
-                                </div>
-                            </div>
+                    <t t-call="mobikey_sale_documents.report_section_lead">
+                        <div class="mobikey-section-title"
+                             t-attf-style="background: #{primary_color}; color: #{primary_foreground};">
+                            4. Bank References
                         </div>
+                        <t t-set="bank_group" t-value="bank_groups[0]"/>
+                        <t t-call="mobikey_sale_documents.report_bank_group"/>
+                    </t>
+                    <t t-foreach="bank_groups[1:]" t-as="bank_group">
+                        <t t-call="mobikey_sale_documents.report_bank_group"/>
                     </t>
                 </div>
 
-                <div t-if="not is_html_empty(doc.mobikey_terms_html) or not is_html_empty(doc.note)"
-                     class="mobikey-section-title"
-                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
-                    5. Terms and Conditions
-                </div>
-                <div t-if="not is_html_empty(doc.mobikey_terms_html)"
-                     t-field="doc.mobikey_terms_html"
-                     class="mobikey-terms"/>
-                <div t-elif="not is_html_empty(doc.note)"
-                     t-field="doc.note"
+                <t t-set="terms_blocks" t-value="doc._get_mobikey_terms_blocks()"/>
+                <t t-if="terms_blocks['first']" t-call="mobikey_sale_documents.report_section_lead">
+                    <div class="mobikey-section-title"
+                         t-attf-style="background: #{primary_color}; color: #{primary_foreground};">
+                        5. Terms and Conditions
+                    </div>
+                    <div t-out="terms_blocks['first']" class="mobikey-terms"/>
+                </t>
+                <div t-if="terms_blocks['rest']"
+                     t-out="terms_blocks['rest']"
                      class="mobikey-terms"/>
 
-                <div class="mobikey-section-title"
-                     t-attf-style="background: #{primary_color}; color: #FFFFFF;">
-                    6. Signatures
-                </div>
                 <t t-set="signature_count"
                    t-value="1 + (1 if template.signatory_2_id or template.signatory_2_image else 0) + (1 if template.show_customer_signature else 0)"/>
-                <div class="mobikey-signature-row">
-                    <div class="mobikey-signature-column" t-attf-style="width: #{100.0 / signature_count}%;">
-                        <img t-if="template.signatory_1_image"
-                             t-att-src="image_data_uri(template.signatory_1_image)"
-                             alt="First signature"
-                             style="max-width: 150px; max-height: 55px; object-fit: contain;"/>
-                        <div t-else="" style="height: 55px;"/>
-                        <div class="mobikey-signature-line">
-                            <strong t-if="template.signatory_1_id" t-field="template.signatory_1_id.name"/>
-                            <strong t-else="" t-field="doc.user_id.name"/>
-                        </div>
-                        <div t-if="template.signatory_1_title" t-field="template.signatory_1_title"/>
-                        <div t-else="" t-field="doc.company_id.name"/>
+                <t t-call="mobikey_sale_documents.report_section_lead">
+                    <div class="mobikey-section-title"
+                         t-attf-style="background: #{primary_color}; color: #{primary_foreground};">
+                        6. Signatures
                     </div>
-                    <div t-if="template.signatory_2_id or template.signatory_2_image"
-                         class="mobikey-signature-column"
-                         t-attf-style="width: #{100.0 / signature_count}%;">
-                        <img t-if="template.signatory_2_image"
-                             t-att-src="image_data_uri(template.signatory_2_image)"
-                             alt="Second signature"
-                             style="max-width: 150px; max-height: 55px; object-fit: contain;"/>
-                        <div t-else="" style="height: 55px;"/>
-                        <div class="mobikey-signature-line">
-                            <strong t-if="template.signatory_2_id" t-field="template.signatory_2_id.name"/>
+                    <div class="mobikey-signature-row">
+                        <div class="mobikey-signature-column" t-attf-style="width: #{100.0 / signature_count}%;">
+                            <img t-if="template.signatory_1_image"
+                                 t-att-src="image_data_uri(template.signatory_1_image)"
+                                 alt="First signature"
+                                 style="max-width: 150px; max-height: 55px; object-fit: contain;"/>
+                            <div t-else="" style="height: 55px;"/>
+                            <div class="mobikey-signature-line">
+                                <strong t-if="template.signatory_1_id" t-field="template.signatory_1_id.name"/>
+                                <strong t-else="" t-field="doc.user_id.name"/>
+                            </div>
+                            <div t-if="template.signatory_1_title" t-field="template.signatory_1_title"/>
+                            <div t-else="" t-field="doc.company_id.name"/>
                         </div>
-                        <div t-if="template.signatory_2_title" t-field="template.signatory_2_title"/>
-                    </div>
-                    <div t-if="template.show_customer_signature"
-                         class="mobikey-signature-column"
-                         t-attf-style="width: #{100.0 / signature_count}%;">
-                        <img t-if="doc.signature and doc.env.context.get('sale_include_signature')"
-                             t-att-src="image_data_uri(doc.signature)"
-                             alt="Customer signature"
-                             style="max-width: 150px; max-height: 55px; object-fit: contain;"/>
-                        <div t-else="" style="height: 55px;"/>
-                        <div class="mobikey-signature-line">
-                            <strong t-if="doc.signed_by and doc.env.context.get('sale_include_signature')"
-                                    t-field="doc.signed_by"/>
-                            <strong t-else="" t-field="doc.partner_id.name"/>
+                        <div t-if="template.signatory_2_id or template.signatory_2_image"
+                             class="mobikey-signature-column"
+                             t-attf-style="width: #{100.0 / signature_count}%;">
+                            <img t-if="template.signatory_2_image"
+                                 t-att-src="image_data_uri(template.signatory_2_image)"
+                                 alt="Second signature"
+                                 style="max-width: 150px; max-height: 55px; object-fit: contain;"/>
+                            <div t-else="" style="height: 55px;"/>
+                            <div class="mobikey-signature-line">
+                                <strong t-if="template.signatory_2_id" t-field="template.signatory_2_id.name"/>
+                            </div>
+                            <div t-if="template.signatory_2_title" t-field="template.signatory_2_title"/>
                         </div>
-                        <div>Customer</div>
+                        <div t-if="template.show_customer_signature"
+                             class="mobikey-signature-column"
+                             t-attf-style="width: #{100.0 / signature_count}%;">
+                            <img t-if="doc.signature and doc.env.context.get('sale_include_signature')"
+                                 t-att-src="image_data_uri(doc.signature)"
+                                 alt="Customer signature"
+                                 style="max-width: 150px; max-height: 55px; object-fit: contain;"/>
+                            <div t-else="" style="height: 55px;"/>
+                            <div class="mobikey-signature-line">
+                                <strong t-if="doc.signed_by and doc.env.context.get('sale_include_signature')"
+                                        t-field="doc.signed_by"/>
+                                <strong t-else="" t-field="doc.partner_id.name"/>
+                            </div>
+                            <div>Customer</div>
+                        </div>
                     </div>
-                </div>
+                </t>
             </div>
         </t>
     </template>
