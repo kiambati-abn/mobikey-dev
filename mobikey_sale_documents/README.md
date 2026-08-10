@@ -12,16 +12,17 @@ templates.
 3. On each product's **Quotation Details** tab, choose its manufacturer brand,
    add ordered specifications, maintain the standard Sales Description used for
    OBS, and configure default warranty terms. The existing product **Model** field
-   becomes the characteristics heading. Products with selected variants or ordered
-   specifications receive a characteristics block automatically; use **Show
-   Detailed Specifications** to force one for any other product.
+   becomes the characteristics heading. OBS is displayed by default; disable
+   **Display OBS by Default** only for products whose Sales Description should not
+   appear in quotation and proforma documents.
 4. In **Sales > Configuration > Proforma Templates**, create a template for a
    company/branch and configure its dealer logo override, manufacturer-logo
    strategy, visible logo-size choices, color scheme, bank accounts,
    footer, and signatories. Logo sizes are displayed as radio choices in the
    template's **Branding** group. Appearance colors use visual pickers and a live
-   palette preview. **Restore Scheme Defaults** returns the selected Mobikey or
-   Blue and Green preset to its maintained values.
+   palette preview. An optional text watermark can label every page, for example
+   **Original**, **Copy**, or **Draft**. **Restore Scheme Defaults** returns the
+   selected Mobikey or Blue and Green preset to its maintained values.
 
 Only Sales Managers can maintain brands and document templates. Salespeople can
 read and select them.
@@ -49,8 +50,9 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
 
 ## Important behavior
 
-- Selecting a document template copies its bank accounts and fixed brand choices
-  to the quotation. They remain editable on the draft quotation.
+- Selecting a document template copies its bank accounts, fixed brand choices,
+  and optional watermark to the quotation. They remain editable on the draft
+  quotation, and later template changes do not alter its watermark.
 - Terms and Conditions always use Odoo's native sales-order terms. A selected
   Quotation Template's terms take precedence over company defaults exactly as they
   do in Odoo's standard quotation, and their stored HTML formatting is rendered
@@ -58,14 +60,15 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
 - Product specifications, description, and warranty are snapshotted on the sales
   line so later product-master edits do not silently change an issued document.
   Empty draft OBS values fall back to the current product Sales Description; the
-  explicit refresh action updates every product snapshot before issue.
+  explicit refresh action updates every product snapshot before issue. **Display
+  OBS** can be disabled on an individual quotation line without hiding its model,
+  specifications, or warranty.
 - The product Model heading and a variant attribute also named Model are separate;
   both are printed when both are present.
-- Every product line with selected variant attributes or ordered specifications
-  prints its own characteristics block. The manual product-detail option remains
-  an override for model/OBS/warranty-only products. Services and simple extras
-  without document details remain identifiable only in the consolidated commercial
-  table.
+- Every product line with selected variant attributes, ordered specifications,
+  visible OBS, or warranty prints its own characteristics block. Services and
+  simple extras without those document details remain identifiable only in the
+  consolidated commercial table.
 - Delivery terms and the expected delivery date are independent and print together
   when both are populated. Payment details use a readable striped 30/70 layout.
   Bank accounts use a 42/58 bank-information and account-number layout and remain
@@ -94,6 +97,10 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
 - Structured section headings are grouped with only their first meaningful content
   block. Native terms retain Odoo's own flowing HTML rather than being split or
   re-serialized by the branded report.
+- Optional template watermarks use a restrained diagonal text layer behind the
+  body on every page. The setting is snapshotted onto the quotation when the
+  template is selected. It applies only to the custom Mobikey layout; native Odoo
+  quotations and proformas never receive the watermark.
 - The normal Odoo report actions and mail templates are not replaced. Uninstalling
   this addon restores standard rendering without leaving rewritten report actions.
 - Bank accounts are restricted to the sales-order company/branch. Templates are

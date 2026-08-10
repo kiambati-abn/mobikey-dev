@@ -54,6 +54,7 @@
                 <field name="company_id" groups="base.group_multi_company"/>
                 <field name="brand_source"/>
                 <field name="brand_ids" widget="many2many_tags" optional="show"/>
+                <field name="watermark_enabled" optional="show"/>
                 <field name="active" widget="boolean_toggle"/>
             </list>
         </field>
@@ -110,6 +111,15 @@
                                     <field name="body_text_color" widget="color"/>
                                     <field name="muted_text_color" widget="color"/>
                                     <field name="light_background_color" widget="color"/>
+                                </group>
+                            </group>
+                            <group>
+                                <group string="Watermark">
+                                    <field name="watermark_enabled"/>
+                                    <field name="watermark_text"
+                                           invisible="not watermark_enabled"
+                                           required="watermark_enabled"
+                                           placeholder="e.g. Original"/>
                                 </group>
                             </group>
                             <group string="Palette Preview">

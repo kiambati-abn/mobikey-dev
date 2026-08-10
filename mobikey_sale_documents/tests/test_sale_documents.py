@@ -1,6 +1,6 @@
 from lxml import html as lxml_html
 
-from odoo.exceptions import UserError
+from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Command
 from odoo.tests import TransactionCase, tagged
 
@@ -144,6 +144,44 @@ class TestMobikeySaleDocuments(TransactionCase):
         order.state = 'sent'
         with self.assertRaises(UserError):
             order.action_mobikey_refresh_document_details()
+
+    def test_display_obs_is_enabled_by_default(self):
+        product_template = self.env['product.template'].create({
+            'name': 'Default OBS Product',
+            'sale_ok': True,
+            'description_sale': 'Visible by default.',
+        })
+        product = product_template.product_variant_id
+        order = self._create_order(order_line=[Command.create({
+            'product_id': product.id,
+            'name': product.display_name,
+            'product_uom_qty': 1.0,
+            'product_uom_id': product.uom_id.id,
+            'price_unit': 100.0,
+        })])
+
+        self.assertTrue(product_template.mobikey_show_product_details)
+        self.assertTrue(order.order_line.mobikey_show_product_details)
+        self.assertEqual(
+            order.order_line._get_mobikey_report_observation(),
+            'Visible by default.',
+        )
+
+    def test_disabling_obs_keeps_specs_and_warranty_visible(self):
+        order = self._create_order()
+        line = order.order_line
+        line.mobikey_show_product_details = False
+
+        self.assertFalse(line._get_mobikey_report_observation())
+        self.assertTrue(line._has_mobikey_characteristics())
+        report_html, _report_type = self.env['ir.actions.report']._render_qweb_html(
+            'sale.action_report_saleorder',
+            order.ids,
+        )
+        self.assertNotIn(b'Customer-facing vehicle observation.', report_html)
+        self.assertIn(b'Engine', report_html)
+        self.assertIn(b'Diesel', report_html)
+        self.assertIn(b'24 months or 100,000 kilometres', report_html)
 
     def test_product_model_title_does_not_hide_model_variant(self):
         model_attribute = self.env['product.attribute'].create({
@@ -648,7 +686,68 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertEqual(proforma_report_type, 'html')
         self.assertIn(b'Proforma Invoice', proforma_html)
 
+    def test_optional_watermark_renders_in_custom_reports(self):
+        self.assertFalse(self.document_template.watermark_enabled)
+        self.assertFalse(
+            self.document_template._get_mobikey_watermark_text()
+        )
+        plain_order = self._create_order()
+        html, _report_type = self.env['ir.actions.report']._render_qweb_html(
+            'sale.action_report_saleorder',
+            plain_order.ids,
+        )
+        tree = lxml_html.fromstring(html)
+        self.assertFalse(tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-watermark ')]"
+        ))
+
+        self.document_template.write({
+            'watermark_enabled': True,
+            'watermark_text': 'Original',
+        })
+        order = self._create_order()
+        self.assertEqual(
+            self.document_template._get_mobikey_watermark_text(),
+            'Original',
+        )
+        self.assertTrue(order.mobikey_watermark_enabled)
+        self.assertEqual(order.mobikey_watermark_text, 'Original')
+        self.document_template.watermark_text = 'Copy'
+        self.assertEqual(order._get_mobikey_watermark_text(), 'Original')
+        for report_name in (
+            'sale.action_report_saleorder',
+            'sale.action_report_pro_forma_invoice',
+        ):
+            report_html, report_type = (
+                self.env['ir.actions.report']._render_qweb_html(
+                    report_name,
+                    order.ids,
+                )
+            )
+            self.assertEqual(report_type, 'html')
+            tree = lxml_html.fromstring(report_html)
+            watermarks = tree.xpath(
+                "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-watermark ')]"
+            )
+            self.assertEqual(len(watermarks), 1)
+            self.assertEqual(watermarks[0].text_content().strip(), 'Original')
+            rendered_html = report_html.decode()
+            self.assertIn('position: fixed', rendered_html)
+            self.assertIn('opacity: 0.10', rendered_html)
+            self.assertIn('rotate(-40deg)', rendered_html)
+
+    def test_enabled_watermark_requires_text(self):
+        with self.assertRaises(ValidationError):
+            self.document_template.write({
+                'watermark_enabled': True,
+                'watermark_text': '   ',
+            })
+
     def test_native_report_is_retained_without_selection(self):
+        self.document_template.write({
+            'watermark_enabled': True,
+            'watermark_text': 'Original',
+        })
         order = self._create_order(mobikey_document_template_id=False)
 
         html, report_type = self.env['ir.actions.report']._render_qweb_html(
@@ -657,6 +756,7 @@ class TestMobikeySaleDocuments(TransactionCase):
         )
 
         self.assertEqual(report_type, 'html')
+        self.assertNotIn(b'mobikey-watermark', html)
         self.assertNotIn(b'Description and Product Characteristics', html)
         self.assertIn(b'Quotation', html)
 
@@ -667,6 +767,7 @@ class TestMobikeySaleDocuments(TransactionCase):
             )
         )
         self.assertEqual(proforma_report_type, 'html')
+        self.assertNotIn(b'mobikey-watermark', proforma_html)
         self.assertNotIn(
             b'Description and Product Characteristics',
             proforma_html,

@@ -147,6 +147,17 @@ class MobikeyDocumentTemplate(models.Model):
         compute='_compute_palette_preview',
         sanitize=False,
     )
+    watermark_enabled = fields.Boolean(
+        string='Display Watermark',
+        help='Display a light diagonal text watermark behind every page of this custom document.',
+    )
+    watermark_text = fields.Char(
+        string='Watermark Text',
+        default='Original',
+        size=32,
+        translate=True,
+        help='Short document-status label, for example Original, Copy, or Draft.',
+    )
     bank_account_ids = fields.Many2many(
         'res.partner.bank',
         'mobikey_document_template_bank_rel',
@@ -233,6 +244,13 @@ class MobikeyDocumentTemplate(models.Model):
             'brand_height': brand_height,
             'header_height': max(23, issuer_height + 2),
         }
+
+    def _get_mobikey_watermark_text(self):
+        """Return normalized optional watermark text for the custom report."""
+        self.ensure_one()
+        if not self.watermark_enabled:
+            return False
+        return (self.watermark_text or '').strip() or False
 
     @api.onchange('color_scheme')
     def _onchange_color_scheme(self):
@@ -388,6 +406,16 @@ class MobikeyDocumentTemplate(models.Model):
             if template.brand_source == 'template' and not template.brand_ids:
                 raise ValidationError(_(
                     'Select at least one manufacturer brand, or use Brands from Products.'
+                ))
+
+    @api.constrains('watermark_enabled', 'watermark_text')
+    def _check_watermark_text(self):
+        for template in self:
+            if template.watermark_enabled and not (
+                template.watermark_text or ''
+            ).strip():
+                raise ValidationError(_(
+                    'Enter watermark text or disable the watermark.'
                 ))
 
     @api.constrains(

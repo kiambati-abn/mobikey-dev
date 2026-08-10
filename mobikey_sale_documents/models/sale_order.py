@@ -24,6 +24,17 @@ class SaleOrder(models.Model):
         copy=True,
         help='Use for promises such as In Stock or Within 3 Months. The commitment date remains available separately.',
     )
+    mobikey_watermark_enabled = fields.Boolean(
+        string='Display Watermark',
+        copy=True,
+        help='Display the snapshotted watermark on this custom quotation or proforma.',
+    )
+    mobikey_watermark_text = fields.Char(
+        string='Watermark Text',
+        copy=True,
+        size=32,
+        help='Short document-status label copied from the selected document template.',
+    )
     mobikey_terms_html = fields.Html(
         string='Legacy Document Terms and Conditions',
         copy=True,
@@ -81,6 +92,8 @@ class SaleOrder(models.Model):
                 order.mobikey_document_template_id = False
                 order.mobikey_bank_account_ids = False
                 order.mobikey_brand_ids = False
+                order.mobikey_watermark_enabled = False
+                order.mobikey_watermark_text = False
 
     def _apply_mobikey_document_template(self):
         for order in self:
@@ -88,11 +101,15 @@ class SaleOrder(models.Model):
             if not template:
                 order.mobikey_bank_account_ids = False
                 order.mobikey_brand_ids = False
+                order.mobikey_watermark_enabled = False
+                order.mobikey_watermark_text = False
                 continue
             order.mobikey_bank_account_ids = template.bank_account_ids
             order.mobikey_brand_ids = (
                 template.brand_ids if template.brand_source == 'template' else False
             )
+            order.mobikey_watermark_enabled = template.watermark_enabled
+            order.mobikey_watermark_text = template.watermark_text
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -113,6 +130,8 @@ class SaleOrder(models.Model):
             if 'mobikey_document_template_id' in vals:
                 vals.setdefault('mobikey_bank_account_ids', [Command.clear()])
                 vals.setdefault('mobikey_brand_ids', [Command.clear()])
+                vals.setdefault('mobikey_watermark_enabled', False)
+                vals.setdefault('mobikey_watermark_text', False)
             return
         template = self.env['mobikey.document.template'].browse(template_id).exists()
         if not template:
@@ -123,6 +142,25 @@ class SaleOrder(models.Model):
         )
         brand_ids = template.brand_ids.ids if template.brand_source == 'template' else []
         vals.setdefault('mobikey_brand_ids', [Command.set(brand_ids)])
+        vals.setdefault('mobikey_watermark_enabled', template.watermark_enabled)
+        vals.setdefault('mobikey_watermark_text', template.watermark_text)
+
+    def _get_mobikey_watermark_text(self):
+        """Return normalized snapshotted watermark text for the custom report."""
+        self.ensure_one()
+        if not self.mobikey_watermark_enabled:
+            return False
+        return (self.mobikey_watermark_text or '').strip() or False
+
+    @api.constrains('mobikey_watermark_enabled', 'mobikey_watermark_text')
+    def _check_mobikey_watermark_text(self):
+        for order in self:
+            if order.mobikey_watermark_enabled and not (
+                order.mobikey_watermark_text or ''
+            ).strip():
+                raise ValidationError(_(
+                    'Enter watermark text or disable the watermark.'
+                ))
 
     @api.constrains(
         'company_id',
