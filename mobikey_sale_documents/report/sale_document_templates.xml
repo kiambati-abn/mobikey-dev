@@ -381,6 +381,7 @@
         <t t-set="primary_foreground" t-value="palette['primary_foreground']"/>
         <t t-set="light_foreground" t-value="palette['light_foreground']"/>
         <t t-set="is_proforma" t-value="doc.env.context.get('proforma', False)"/>
+        <t t-set="watermark_text" t-value="doc._get_mobikey_watermark_text()"/>
         <t t-call="mobikey_sale_documents.report_sale_document_layout">
             <div class="page mobikey-report-page">
                 <style>
