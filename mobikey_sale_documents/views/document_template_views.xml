@@ -114,7 +114,7 @@
                                 </group>
                             </group>
                             <group>
-                                <group string="Watermark">
+                                <group string="Document Status">
                                     <field name="watermark_enabled"/>
                                     <field name="watermark_text"
                                            invisible="not watermark_enabled"

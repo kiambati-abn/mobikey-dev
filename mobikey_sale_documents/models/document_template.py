@@ -148,11 +148,11 @@ class MobikeyDocumentTemplate(models.Model):
         sanitize=False,
     )
     watermark_enabled = fields.Boolean(
-        string='Display Watermark',
-        help='Display a light diagonal text watermark behind every page of this custom document.',
+        string='Display Document Status',
+        help='Display a clear document-status stamp in the title and repeated footer.',
     )
     watermark_text = fields.Char(
-        string='Watermark Text',
+        string='Document Status',
         default='Original',
         size=32,
         translate=True,
@@ -246,7 +246,7 @@ class MobikeyDocumentTemplate(models.Model):
         }
 
     def _get_mobikey_watermark_text(self):
-        """Return normalized optional watermark text for the custom report."""
+        """Return the normalized optional document status for the custom report."""
         self.ensure_one()
         if not self.watermark_enabled:
             return False
@@ -415,7 +415,7 @@ class MobikeyDocumentTemplate(models.Model):
                 template.watermark_text or ''
             ).strip():
                 raise ValidationError(_(
-                    'Enter watermark text or disable the watermark.'
+                    'Enter a document status or disable the document status.'
                 ))
 
     @api.constrains(

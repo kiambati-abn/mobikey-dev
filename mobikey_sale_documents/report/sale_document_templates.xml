@@ -224,9 +224,10 @@
         <t t-set="palette" t-value="template._get_mobikey_palette()"/>
         <t t-set="primary_color" t-value="palette['primary']"/>
         <t t-set="body_color" t-value="palette['body']"/>
+        <t t-set="light_background" t-value="palette['light_background']"/>
         <t t-set="issuer_logo" t-value="template.issuer_logo or company.logo"/>
         <t t-set="brands" t-value="doc._get_mobikey_report_brands()"/>
-        <t t-set="watermark_text" t-value="doc._get_mobikey_watermark_text()"/>
+        <t t-set="document_status" t-value="doc._get_mobikey_watermark_text()"/>
         <t t-set="logo_dimensions"
            t-value="template._get_mobikey_logo_dimensions(len(brands))"/>
 
@@ -278,42 +279,11 @@
              t-att-data-oe-id="doc and doc.id"
              t-att-data-oe-lang="doc and doc.env.context.get('lang')"
              t-attf-style="font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.3; color: #{body_color};">
-            <style>
-                .mobikey-watermark {
-                    position: fixed;
-                    top: 43%;
-                    left: 0;
-                    width: 100%;
-                    z-index: 0;
-                    color: #666666;
-                    opacity: 0.10;
-                    font-family: Arial, Helvetica, sans-serif;
-                    font-size: 64pt;
-                    line-height: 1;
-                    font-weight: 700;
-                    letter-spacing: 1.5mm;
-                    text-align: center;
-                    text-transform: uppercase;
-                    white-space: nowrap;
-                    pointer-events: none;
-                    -webkit-transform: rotate(-40deg);
-                    transform: rotate(-40deg);
-                    -webkit-transform-origin: center center;
-                    transform-origin: center center;
-                }
-                .mobikey-report-content-watermarked {
-                    position: relative;
-                    z-index: 1;
-                }
-            </style>
-            <div t-if="watermark_text" class="mobikey-watermark" aria-hidden="true">
-                <span t-out="watermark_text"/>
-            </div>
             <t t-out="0"/>
         </div>
 
         <div t-attf-class="footer o_company_#{company.id}_layout"
-             t-attf-style="min-height: 24mm; padding-top: 4mm; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.35; color: #{body_color}; border: 0 !important; outline: 0 !important; box-shadow: none !important;">
+             t-attf-style="min-height: 26mm; padding-top: 4mm; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.35; color: #{body_color}; background: #FFFFFF !important; border: 0 !important; outline: 0 !important; box-shadow: none !important;">
             <style>
                 .mobikey-footer-note,
                 .mobikey-footer-note p {
@@ -347,6 +317,14 @@
                     text-align: right;
                     white-space: nowrap;
                 }
+                .mobikey-footer-status {
+                    margin-bottom: 0.7mm;
+                    font-size: 9.5pt;
+                    line-height: 1.1;
+                    font-weight: bold;
+                    letter-spacing: 0.35mm;
+                    text-transform: uppercase;
+                }
             </style>
             <div t-attf-style="border-top: 0.35mm solid #{primary_color}; padding-top: 3.5mm;">
                 <div class="mobikey-footer-row">
@@ -362,6 +340,11 @@
                         <span t-if="not is_html_empty(template.footer_note)"> · <span class="mobikey-footer-note" t-field="template.footer_note"/></span>
                     </div>
                     <div class="mobikey-footer-page">
+                        <div t-if="document_status"
+                             class="mobikey-footer-status"
+                             t-attf-style="color: #{primary_color};">
+                            <span t-out="document_status"/>
+                        </div>
                         <span t-field="doc.name"/> · Page <span class="page"/> / <span class="topage"/>
                     </div>
                 </div>
@@ -381,7 +364,7 @@
         <t t-set="primary_foreground" t-value="palette['primary_foreground']"/>
         <t t-set="light_foreground" t-value="palette['light_foreground']"/>
         <t t-set="is_proforma" t-value="doc.env.context.get('proforma', False)"/>
-        <t t-set="watermark_text" t-value="doc._get_mobikey_watermark_text()"/>
+        <t t-set="document_status" t-value="doc._get_mobikey_watermark_text()"/>
         <t t-call="mobikey_sale_documents.report_sale_document_layout">
             <div class="page mobikey-report-page">
                 <style>
@@ -445,6 +428,32 @@
                         vertical-align: top;
                         box-sizing: border-box;
                         font-size: 10pt;
+                    }
+                    .mobikey-document-title,
+                    .mobikey-document-status {
+                        display: inline-block;
+                        vertical-align: middle;
+                    }
+                    .mobikey-document-status {
+                        margin-left: 3mm;
+                        padding: 0.7mm 1.8mm;
+                        border-radius: 1mm;
+                        font-size: 10.5pt;
+                        line-height: 1.1;
+                        font-weight: bold;
+                        letter-spacing: 0.35mm;
+                        text-transform: uppercase;
+                        white-space: nowrap;
+                    }
+                    .mobikey-issuer-summary {
+                        margin-top: 2.5mm;
+                        font-size: 9pt;
+                        line-height: 1.25;
+                    }
+                    .mobikey-issuer-summary .mobikey-label {
+                        display: block;
+                        margin-bottom: 0.5mm;
+                        text-transform: uppercase;
                     }
                     .mobikey-spec-grid {
                         width: 100%;
@@ -718,14 +727,20 @@
                     }
                 </style>
 
-                <div t-attf-class="mobikey-report-content#{' mobikey-report-content-watermarked' if watermark_text else ''}">
-
                 <div class="mobikey-party-row" style="margin-top: 2mm;">
                     <div class="mobikey-party-column" style="width: 46%; padding-left: 0;">
-                        <div t-attf-style="display: inline-block; margin-bottom: 1mm; font-size: 13pt; line-height: 1.2; font-weight: bold; text-transform: uppercase; color: #{primary_color};">
-                            <t t-if="is_proforma">Proforma Invoice</t>
-                            <t t-elif="doc.state in ('draft', 'sent')">Quotation</t>
-                            <t t-else="">Sales Order</t>
+                        <div style="margin-bottom: 1mm;">
+                            <span class="mobikey-document-title"
+                                  t-attf-style="font-size: 13pt; line-height: 1.2; font-weight: bold; text-transform: uppercase; color: #{primary_color};">
+                                <t t-if="is_proforma">Proforma Invoice</t>
+                                <t t-elif="doc.state in ('draft', 'sent')">Quotation</t>
+                                <t t-else="">Sales Order</t>
+                            </span>
+                            <span t-if="document_status"
+                                  class="mobikey-document-status"
+                                  t-attf-style="border: 0.25mm solid #{primary_color}; color: #{primary_color}; background: #{light_background};">
+                                <span t-out="document_status"/>
+                            </span>
                         </div>
                         <div><span class="mobikey-label">Reference:</span> <span t-field="doc.name"/></div>
                         <div>
@@ -746,6 +761,22 @@
                         </div>
                         <div t-if="doc.user_id.email">
                             <span class="mobikey-label">Email:</span> <span t-field="doc.user_id.email"/>
+                        </div>
+                        <div class="mobikey-issuer-summary">
+                            <span class="mobikey-label" t-attf-style="color: #{primary_color};">Issued By</span>
+                            <div>
+                                <strong t-field="doc.company_id.name"/>
+                                <span t-if="doc.company_id.vat">
+                                    · <t t-out="doc.company_id.country_id.vat_label or 'Tax ID'"/>:
+                                    <span t-field="doc.company_id.vat"/>
+                                </span>
+                            </div>
+                            <div t-if="doc.company_id.street or doc.company_id.street2 or doc.company_id.zip or doc.company_id.city or doc.company_id.country_id">
+                                <span t-if="doc.company_id.street" t-field="doc.company_id.street"/><span t-if="doc.company_id.street2">, <span t-field="doc.company_id.street2"/></span><span t-if="doc.company_id.zip or doc.company_id.city"> · <span t-if="doc.company_id.zip" t-field="doc.company_id.zip"/> <span t-if="doc.company_id.city" t-field="doc.company_id.city"/></span><span t-if="doc.company_id.country_id"> · <span t-field="doc.company_id.country_id.name"/></span>
+                            </div>
+                            <div t-if="doc.company_id.phone or doc.company_id.email">
+                                <span t-if="doc.company_id.phone" t-field="doc.company_id.phone"/><span t-if="doc.company_id.email"> · <span t-field="doc.company_id.email"/></span>
+                            </div>
                         </div>
                     </div>
                     <div class="mobikey-party-column" style="width: 3%;"/>
@@ -926,7 +957,6 @@
                         </div>
                     </div>
                 </t>
-                </div>
             </div>
         </t>
     </template>

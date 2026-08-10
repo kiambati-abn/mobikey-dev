@@ -1,6 +1,6 @@
 {
     'name': 'Mobikey Sale Documents',
-    'version': '19.0.1.8.3',
+    'version': '19.0.1.9.0',
     'category': 'Sales/Sales',
     'summary': 'Configurable branded quotation and proforma invoice documents',
     'description': """
