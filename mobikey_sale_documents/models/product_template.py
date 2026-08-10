@@ -10,8 +10,9 @@ class ProductTemplate(models.Model):
         ondelete='restrict',
     )
     mobikey_show_product_details = fields.Boolean(
-        string='Show Detailed Specifications',
-        help='Force a characteristics block even when the product has no selected variant attributes or ordered specifications.',
+        string='Display OBS by Default',
+        default=True,
+        help='Display the product Sales Description as OBS on new quotation lines by default.',
     )
     mobikey_quotation_description = fields.Html(
         string='Quotation Description',
@@ -53,11 +54,13 @@ class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
 
     mobikey_show_product_details = fields.Boolean(
-        string='Show Product Details',
+        string='Display OBS',
         compute='_compute_mobikey_product_document_values',
         store=True,
         readonly=False,
         precompute=True,
+        copy=True,
+        help='Disable this option to hide only OBS from the quotation or proforma. Product specifications and warranty remain visible.',
     )
     mobikey_product_model = fields.Char(
         string='Document Model',
@@ -218,8 +221,10 @@ class SaleOrderLine(models.Model):
         return first_line or self.product_id.display_name
 
     def _get_mobikey_report_observation(self):
-        """Use live product text only while a draft snapshot is still empty."""
+        """Return printable OBS when enabled, with a live draft fallback."""
         self.ensure_one()
+        if not self.mobikey_show_product_details:
+            return False
         if self.mobikey_observation:
             return self.mobikey_observation
         if self.order_id.state == 'draft' and self.product_id:
@@ -230,10 +235,11 @@ class SaleOrderLine(models.Model):
         """Whether this line should receive its own characteristics block."""
         self.ensure_one()
         return bool(
-            self.mobikey_show_product_details
-            or self.mobikey_detail_snapshot
+            self.mobikey_detail_snapshot
             or (
                 self.order_id.state == 'draft'
                 and self._get_mobikey_live_details()
             )
+            or self._get_mobikey_report_observation()
+            or self.mobikey_warranty
         )

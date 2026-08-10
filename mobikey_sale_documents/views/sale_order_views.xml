@@ -26,6 +26,12 @@
                             <field name="commitment_date" readonly="locked"/>
                             <field name="validity_date" readonly="state in ['cancel', 'sale']"/>
                             <field name="mobikey_discount_total" readonly="1"/>
+                            <field name="mobikey_watermark_enabled" readonly="locked"/>
+                            <field name="mobikey_watermark_text"
+                                   readonly="locked"
+                                   invisible="not mobikey_watermark_enabled"
+                                   required="mobikey_watermark_enabled"
+                                   placeholder="e.g. Original"/>
                         </group>
                         <group string="Branding and Payment">
                             <field name="mobikey_company_partner_id" invisible="1"/>
@@ -43,8 +49,7 @@
                 <separator string="Quotation and Proforma Details" colspan="2"/>
                 <field name="mobikey_show_product_details" readonly="parent.locked"/>
                 <field name="mobikey_product_model"
-                       readonly="parent.locked"
-                       invisible="not mobikey_show_product_details"/>
+                       readonly="parent.locked"/>
                 <field name="mobikey_observation"
                        readonly="parent.locked"
                        invisible="not mobikey_show_product_details"

@@ -226,6 +226,7 @@
         <t t-set="body_color" t-value="palette['body']"/>
         <t t-set="issuer_logo" t-value="template.issuer_logo or company.logo"/>
         <t t-set="brands" t-value="doc._get_mobikey_report_brands()"/>
+        <t t-set="watermark_text" t-value="doc._get_mobikey_watermark_text()"/>
         <t t-set="logo_dimensions"
            t-value="template._get_mobikey_logo_dimensions(len(brands))"/>
 
@@ -277,6 +278,37 @@
              t-att-data-oe-id="doc and doc.id"
              t-att-data-oe-lang="doc and doc.env.context.get('lang')"
              t-attf-style="font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.3; color: #{body_color};">
+            <style>
+                .mobikey-watermark {
+                    position: fixed;
+                    top: 43%;
+                    left: 0;
+                    width: 100%;
+                    z-index: 0;
+                    color: #666666;
+                    opacity: 0.10;
+                    font-family: Arial, Helvetica, sans-serif;
+                    font-size: 64pt;
+                    line-height: 1;
+                    font-weight: 700;
+                    letter-spacing: 1.5mm;
+                    text-align: center;
+                    text-transform: uppercase;
+                    white-space: nowrap;
+                    pointer-events: none;
+                    -webkit-transform: rotate(-40deg);
+                    transform: rotate(-40deg);
+                    -webkit-transform-origin: center center;
+                    transform-origin: center center;
+                }
+                .mobikey-report-page {
+                    position: relative;
+                    z-index: 1;
+                }
+            </style>
+            <div t-if="watermark_text" class="mobikey-watermark" aria-hidden="true">
+                <span t-out="watermark_text"/>
+            </div>
             <t t-out="0"/>
         </div>
 
@@ -350,7 +382,7 @@
         <t t-set="light_foreground" t-value="palette['light_foreground']"/>
         <t t-set="is_proforma" t-value="doc.env.context.get('proforma', False)"/>
         <t t-call="mobikey_sale_documents.report_sale_document_layout">
-            <div class="page">
+            <div class="page mobikey-report-page">
                 <style>
                     .mobikey-section-title {
                         padding: 1.4mm 1.8mm;
