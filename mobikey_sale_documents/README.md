@@ -17,9 +17,11 @@ templates.
    Detailed Specifications** to force one for any other product.
 4. In **Sales > Configuration > Proforma Templates**, create a template for a
    company/branch and configure its dealer logo override, manufacturer-logo
-   strategy, visible logo-size choices, colors, bank accounts, terms, footer,
-   and signatories. Logo sizes are displayed as radio choices in the template's
-   **Branding** group.
+   strategy, visible logo-size choices, color scheme, bank accounts, terms,
+   footer, and signatories. Logo sizes are displayed as radio choices in the
+   template's **Branding** group. Appearance colors use visual pickers and a live
+   palette preview. **Restore Scheme Defaults** returns the selected Mobikey or
+   Blue and Green preset to its maintained values.
 
 Only Sales Managers can maintain brands and document templates. Salespeople can
 read and select them.
@@ -64,8 +66,10 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
   when both are populated. Payment details use a readable striped 30/70 layout.
   Bank accounts use a 42/58 bank-information and account-number layout and remain
   grouped by bank and currency without repeating the bank name.
-- The report header contains logos only. Issuer details are kept in a compact footer,
-  while the issuing city and country appear beside the document date.
+- The report header contains logos only. The document summary lists the reference,
+  quotation/proforma date, optional validity date, customer reference, and
+  salesperson in that order. Issuer location and legal details are kept in the
+  footer rather than repeated beside the document date.
 - Dealer and manufacturer logo sizes are selectable on each document template.
   Manufacturer **Automatic** sizing is recommended because it caps and wraps
   mixed-brand headers safely. Compact, Standard, and Large options preserve each
@@ -74,13 +78,17 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
   empty margins, ideally around 1024 x 300 px for a wide logo. The report never
   stretches or crops the image.
 - Printed body text uses a readable 10 pt baseline, borderless two-column product
-  characteristics with faint alternating rows, a shaded OBS block, 9 pt terms,
-  and a 9.5 pt borderless company footer. The layout prioritizes readability over
-  forcing content onto two pages.
-- Primary color is used for high-contrast section hierarchy and the accent color
-  for smaller highlights. A pale accent tint is generated automatically for larger
-  customer, product, OBS, and bank backgrounds so the page does not become visually
-  saturated.
+  characteristics and commercial conditions with faint alternating rows, a shaded
+  OBS block, 9 pt terms, and a readable two-line company footer. The footer reserves
+  about 20 mm, has a primary-color separator, and keeps page numbering right aligned.
+- The Mobikey preset uses dark slate `#323C48` and red `#D32D49`; the previous blue
+  `#305496` and green `#A9D08E` palette remains available as an alternative. Primary
+  and accent are the only required colors. Blank body, muted, or light-background
+  overrides use safe neutral or generated fallbacks, and foreground text is selected
+  for contrast on configurable colored backgrounds.
+- Major headings are grouped with only their first meaningful content block. This
+  prevents orphan headings without forcing long product, commercial, bank, or terms
+  sections onto a new page in their entirety.
 - The normal Odoo report actions and mail templates are not replaced. Uninstalling
   this addon restores standard rendering without leaving rewritten report actions.
 - Bank accounts are restricted to the sales-order company/branch. Templates are
@@ -102,6 +110,9 @@ repository on the addons path:
 odoo-bin -d <development_database> -i mobikey_sale_documents --test-enable --stop-after-init
 ```
 
-Before staging or production rollout, render both quotation and proforma PDFs
-with realistic long specifications and terms to confirm pagination, logo sizing,
-fonts, tax localization, and the configured wkhtmltopdf/Chromium report engine.
+The automated suite renders representative branded quotation and proforma PDFs,
+plus the native quotation fallback. Before staging or production rollout, also
+render realistic one-, two-, and multi-product documents with long specifications,
+commercial descriptions, payment notes, banks, and terms to visually confirm
+pagination, footer clearance, logo sizing, fonts, tax localization, and the
+configured wkhtmltopdf/Chromium report engine.

@@ -34,8 +34,12 @@ class TestMobikeySaleDocuments(TransactionCase):
         cls.document_template = cls.env['mobikey.document.template'].create({
             'name': 'Test Branded Proforma',
             'company_id': cls.env.company.id,
+            'color_scheme': 'blue_green',
             'primary_color': '#305496',
             'accent_color': '#A9D08E',
+            'body_text_color': '#222222',
+            'muted_text_color': '#666666',
+            'light_background_color': '#E5F1DD',
             'brand_source': 'template',
             'brand_ids': [Command.set(cls.brand.ids)],
             'bank_account_ids': [Command.set(cls.bank_account.ids)],
@@ -382,7 +386,12 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertIn('max-width: 60mm', report_html.decode())
         self.assertIn('max-width: 42mm', report_html.decode())
         self.assertIn('background: #E5F1DD', report_html.decode())
-        self.assertIn(b'Nairobi, Kenya', report_html)
+        article = tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' article ')]"
+        )[0]
+        self.assertNotIn('Nairobi, Kenya', article.text_content())
+        self.assertIn('Nairobi', footer.text_content())
+        self.assertIn('Kenya', footer.text_content())
 
     def test_template_logo_size_and_color_choices_are_bounded(self):
         self.document_template.write({
@@ -408,6 +417,120 @@ class TestMobikeySaleDocuments(TransactionCase):
             '#F2F8EE',
         )
 
+    def test_color_schemes_fallbacks_and_contrast_are_complete(self):
+        mobikey_template = self.document_template.copy({
+            'name': 'Mobikey Brand Colors',
+            'color_scheme': 'mobikey',
+        })
+        mobikey_template.action_restore_color_scheme_defaults()
+
+        self.assertEqual(mobikey_template.primary_color, '#323C48')
+        self.assertEqual(mobikey_template.accent_color, '#D32D49')
+        self.assertEqual(mobikey_template.light_background_color, '#F0F1F3')
+        self.assertIn('Primary', mobikey_template.palette_preview)
+        self.assertIn('#323C48', mobikey_template.palette_preview)
+        self.assertEqual(
+            mobikey_template._get_mobikey_palette()['primary_foreground'],
+            '#FFFFFF',
+        )
+
+        mobikey_template.write({
+            'color_scheme': 'custom',
+            'primary_color': '#FFFFFF',
+            'accent_color': '#000000',
+            'body_text_color': False,
+            'muted_text_color': False,
+            'light_background_color': False,
+        })
+        palette = mobikey_template._get_mobikey_palette()
+        self.assertEqual(palette['body'], '#222222')
+        self.assertEqual(palette['muted'], '#666666')
+        self.assertEqual(palette['light_background'], '#B2B2B2')
+        self.assertEqual(palette['stripe'], '#D9D9D9')
+        self.assertEqual(palette['primary_foreground'], '#000000')
+        self.assertEqual(palette['accent_foreground'], '#FFFFFF')
+
+        mobikey_template.color_scheme = 'blue_green'
+        mobikey_template._onchange_color_scheme()
+        self.assertEqual(mobikey_template.primary_color, '#305496')
+        self.assertEqual(mobikey_template.accent_color, '#A9D08E')
+        self.assertEqual(mobikey_template.light_background_color, '#E5F1DD')
+
+    def test_document_summary_order_and_validity_visibility(self):
+        order = self._create_order(
+            validity_date='2026-08-31',
+            client_order_ref='CUSTOMER-REF-42',
+        )
+
+        report_html, _report_type = self.env['ir.actions.report']._render_qweb_html(
+            'sale.action_report_saleorder',
+            order.ids,
+        )
+        tree = lxml_html.fromstring(report_html)
+        summary = tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-party-column ')][1]"
+        )[0].text_content()
+        labels = [
+            'Reference:',
+            'Quotation Date:',
+            'Validity Date:',
+            'Customer Reference:',
+            'Salesperson:',
+        ]
+        positions = [summary.index(label) for label in labels]
+        self.assertEqual(positions, sorted(positions))
+
+        order.validity_date = False
+        report_html, _report_type = self.env['ir.actions.report']._render_qweb_html(
+            'sale.action_report_saleorder',
+            order.ids,
+        )
+        self.assertNotIn(b'Validity Date:', report_html)
+
+    def test_section_leads_group_headings_with_initial_content(self):
+        order = self._create_order(
+            payment_term_id=self.env.ref('account.account_payment_term_30days').id,
+            validity_date='2026-08-31',
+        )
+        order.mobikey_terms_html = (
+            '<div><p>First legal paragraph.</p><p>Second legal paragraph.</p></div>'
+        )
+
+        blocks = order._get_mobikey_terms_blocks()
+        self.assertIn('First legal paragraph.', str(blocks['first']))
+        self.assertNotIn('Second legal paragraph.', str(blocks['first']))
+        self.assertIn('Second legal paragraph.', str(blocks['rest']))
+
+        report_html, _report_type = self.env['ir.actions.report']._render_qweb_html(
+            'sale.action_report_saleorder',
+            order.ids,
+        )
+        tree = lxml_html.fromstring(report_html)
+        leads = tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-section-lead ')]"
+        )
+        lead_text = [' '.join(lead.text_content().split()) for lead in leads]
+        self.assertTrue(any(
+            'Commercial Conditions' in text and 'Description' in text
+            for text in lead_text
+        ))
+        self.assertTrue(any(
+            'Payment, Delivery and Validity' in text and 'Payment Conditions' in text
+            for text in lead_text
+        ))
+        self.assertTrue(any(
+            'Bank References' in text and 'Document Test Bank' in text
+            for text in lead_text
+        ))
+        self.assertTrue(any(
+            'Terms and Conditions' in text and 'First legal paragraph.' in text
+            for text in lead_text
+        ))
+        self.assertTrue(any(
+            'Signatures' in text and self.customer.name in text
+            for text in lead_text
+        ))
+
     def test_characteristic_rows_are_borderless_and_faintly_striped(self):
         self.env['mobikey.product.specification'].create({
             'product_tmpl_id': self.product_template.id,
@@ -431,6 +554,42 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertIn('background: #F2F8EE', rows[1].attrib['style'])
         self.assertFalse(tree.xpath("//div[contains(@class, 'mobikey-spec-grid')]//table"))
 
+    def test_commercial_rows_are_semantic_aligned_and_faintly_striped(self):
+        second_product = self.product_template.copy({
+            'name': 'Second Commercial Product',
+        }).product_variant_id
+        order = self._create_order()
+        order.write({'order_line': [Command.create({
+            'product_id': second_product.id,
+            'name': (
+                'A long customer-facing product description that should wrap '
+                'without changing the numeric column alignment.'
+            ),
+            'product_uom_qty': 1.0,
+            'product_uom_id': second_product.uom_id.id,
+            'price_unit': 500.0,
+        })]})
+
+        report_html, _report_type = self.env['ir.actions.report']._render_qweb_html(
+            'sale.action_report_saleorder',
+            order.ids,
+        )
+        tree = lxml_html.fromstring(report_html)
+        commercial_tables = tree.xpath(
+            "//table[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-commercial-table ')]"
+        )
+        self.assertGreaterEqual(len(commercial_tables), 2)
+        header = commercial_tables[0].xpath('.//thead')[0]
+        self.assertIn('background: #E5F1DD', header.attrib['style'])
+        self.assertIn('color: #305496', header.attrib['style'])
+        rows = tree.xpath(
+            "//tr[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-commercial-item ')]"
+        )
+        self.assertEqual(len(rows), 2)
+        self.assertIn('background: #FFFFFF', rows[0].attrib['style'])
+        self.assertIn('background: #F2F8EE', rows[1].attrib['style'])
+        self.assertTrue(all(row.xpath('./td[contains(@class, "mobikey-number")]') for row in rows))
+
     def test_native_report_renders_custom_dispatch(self):
         order = self._create_order()
 
@@ -450,7 +609,8 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertIn('background: #305496; color: #FFFFFF', rendered_html)
         self.assertIn('background: #E5F1DD', rendered_html)
         self.assertIn('mobikey-spec-row', rendered_html)
-        self.assertIn('font-size: 9.5pt; line-height: 1.25', rendered_html)
+        self.assertIn('font-size: 10pt; line-height: 1.3', rendered_html)
+        self.assertIn('border-top: 0.35mm solid #305496', rendered_html)
 
         proforma_html, proforma_report_type = (
             self.env['ir.actions.report']._render_qweb_html(
@@ -472,3 +632,57 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertEqual(report_type, 'html')
         self.assertNotIn(b'Description and Product Characteristics', html)
         self.assertIn(b'Quotation', html)
+
+        proforma_html, proforma_report_type = (
+            self.env['ir.actions.report']._render_qweb_html(
+                'sale.action_report_pro_forma_invoice',
+                order.ids,
+            )
+        )
+        self.assertEqual(proforma_report_type, 'html')
+        self.assertNotIn(
+            b'Description and Product Characteristics',
+            proforma_html,
+        )
+
+    def test_representative_quotation_and_proforma_pdfs_render(self):
+        second_product = self.product_template.copy({
+            'name': 'Second PDF Product',
+            'model': 'SECOND PDF MODEL',
+        }).product_variant_id
+        third_product = self.product_template.copy({
+            'name': 'Third PDF Product',
+            'model': 'THIRD PDF MODEL',
+        }).product_variant_id
+        order = self._create_order()
+        order.write({'order_line': [
+            Command.create({
+                'product_id': product.id,
+                'name': product.display_name,
+                'product_uom_qty': 1.0,
+                'product_uom_id': product.uom_id.id,
+                'price_unit': product.list_price,
+            })
+            for product in (second_product, third_product)
+        ]})
+
+        for report_name in (
+            'sale.action_report_saleorder',
+            'sale.action_report_pro_forma_invoice',
+        ):
+            pdf, report_type = self.env['ir.actions.report']._render_qweb_pdf(
+                report_name,
+                order.ids,
+            )
+            self.assertEqual(report_type, 'pdf')
+            self.assertTrue(pdf.startswith(b'%PDF'))
+
+        native_order = self._create_order(mobikey_document_template_id=False)
+        native_pdf, native_report_type = (
+            self.env['ir.actions.report']._render_qweb_pdf(
+                'sale.action_report_saleorder',
+                native_order.ids,
+            )
+        )
+        self.assertEqual(native_report_type, 'pdf')
+        self.assertTrue(native_pdf.startswith(b'%PDF'))

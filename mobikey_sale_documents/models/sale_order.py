@@ -1,6 +1,10 @@
+from lxml import etree, html as lxml_html
+from markupsafe import Markup, escape
+
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Command
+from odoo.tools import is_html_empty
 
 
 class SaleOrder(models.Model):
@@ -193,12 +197,54 @@ class SaleOrder(models.Model):
                 line.write(values)
         return True
 
-    def _get_mobikey_issuer_location(self):
+    def _get_mobikey_terms_blocks(self):
+        """Split configured terms so the title stays with the first content block."""
         self.ensure_one()
-        return ', '.join(filter(None, (
-            self.company_id.city,
-            self.company_id.country_id.name,
-        )))
+        terms = self.mobikey_terms_html
+        if is_html_empty(terms):
+            terms = self.note
+        if is_html_empty(terms):
+            return {'first': False, 'rest': False}
+
+        try:
+            fragments = lxml_html.fragments_fromstring(str(terms))
+        except (etree.ParserError, ValueError):
+            fragments = [str(terms)]
+
+        expanded_fragments = []
+        for fragment in fragments:
+            if (
+                not isinstance(fragment, str)
+                and fragment.tag == 'div'
+                and not fragment.attrib
+                and not (fragment.text or '').strip()
+                and len(fragment)
+            ):
+                expanded_fragments.extend(fragment)
+            else:
+                expanded_fragments.append(fragment)
+
+        blocks = []
+        for fragment in expanded_fragments:
+            if isinstance(fragment, str):
+                content = fragment.strip()
+                if content:
+                    blocks.append('<p>%s</p>' % escape(content))
+                continue
+            content = lxml_html.tostring(
+                fragment,
+                encoding='unicode',
+                method='html',
+            ).strip()
+            if content and not is_html_empty(content):
+                blocks.append(content)
+
+        if not blocks:
+            return {'first': False, 'rest': False}
+        return {
+            'first': Markup(blocks[0]),
+            'rest': Markup('').join(Markup(block) for block in blocks[1:]) or False,
+        }
 
     def _get_mobikey_bank_groups(self):
         """Group payment accounts by bank for a compact multi-currency layout."""

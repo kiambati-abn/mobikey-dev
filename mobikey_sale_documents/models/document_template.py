@@ -1,10 +1,29 @@
 import re
 
+from markupsafe import Markup
+
 from odoo import api, fields, models, _
 from odoo.exceptions import ValidationError
 
 
 HEX_COLOR_RE = re.compile(r'^#[0-9A-Fa-f]{6}$')
+
+COLOR_SCHEME_DEFAULTS = {
+    'mobikey': {
+        'primary_color': '#323C48',
+        'accent_color': '#D32D49',
+        'body_text_color': '#222222',
+        'muted_text_color': '#666666',
+        'light_background_color': '#F0F1F3',
+    },
+    'blue_green': {
+        'primary_color': '#305496',
+        'accent_color': '#A9D08E',
+        'body_text_color': '#222222',
+        'muted_text_color': '#666666',
+        'light_background_color': '#E5F1DD',
+    },
+}
 
 
 class MobikeyDocumentBrand(models.Model):
@@ -96,8 +115,38 @@ class MobikeyDocumentTemplate(models.Model):
         default='auto',
         help='Automatic is recommended for quotations containing multiple brands.',
     )
-    primary_color = fields.Char(required=True, default='#305496')
-    accent_color = fields.Char(required=True, default='#A9D08E')
+    color_scheme = fields.Selection(
+        selection=[
+            ('mobikey', 'Mobikey Brand'),
+            ('blue_green', 'Blue and Green'),
+            ('custom', 'Custom'),
+        ],
+        required=True,
+        default='mobikey',
+        help='Select a maintained palette, or Custom to manage every color manually.',
+    )
+    primary_color = fields.Char(required=True, default='#323C48')
+    accent_color = fields.Char(required=True, default='#D32D49')
+    body_text_color = fields.Char(
+        string='Body Text Color',
+        default='#222222',
+        help='Optional. Uses #222222 when left empty.',
+    )
+    muted_text_color = fields.Char(
+        string='Muted Text Color',
+        default='#666666',
+        help='Optional. Uses #666666 when left empty.',
+    )
+    light_background_color = fields.Char(
+        string='Light Background Color',
+        default='#F0F1F3',
+        help='Optional. A pale tint is generated automatically when left empty.',
+    )
+    palette_preview = fields.Html(
+        string='Palette Preview',
+        compute='_compute_palette_preview',
+        sanitize=False,
+    )
     bank_account_ids = fields.Many2many(
         'res.partner.bank',
         'mobikey_document_template_bank_rel',
@@ -184,29 +233,148 @@ class MobikeyDocumentTemplate(models.Model):
             'header_height': max(23, issuer_height + 2),
         }
 
-    def _get_mobikey_accent_tint(self):
-        """Blend the configured accent with white for calm large-area fills."""
-        self.ensure_one()
-        accent = (self.accent_color or '#E9EEF4').lstrip('#')
-        components = [int(accent[index:index + 2], 16) for index in (0, 2, 4)]
-        tinted = [round(component * 0.30 + 255 * 0.70) for component in components]
+    @api.onchange('color_scheme')
+    def _onchange_color_scheme(self):
+        for template in self:
+            defaults = COLOR_SCHEME_DEFAULTS.get(template.color_scheme)
+            if defaults:
+                template.update(defaults)
+
+    def action_restore_color_scheme_defaults(self):
+        for template in self:
+            defaults = COLOR_SCHEME_DEFAULTS.get(template.color_scheme)
+            if defaults:
+                template.write(defaults)
+        return True
+
+    @staticmethod
+    def _safe_color(value, fallback):
+        return value.upper() if value and HEX_COLOR_RE.fullmatch(value) else fallback
+
+    @staticmethod
+    def _mix_with_white(color, color_weight):
+        components = [
+            int(color.lstrip('#')[index:index + 2], 16)
+            for index in (0, 2, 4)
+        ]
+        tinted = [
+            round(component * color_weight + 255 * (1 - color_weight))
+            for component in components
+        ]
         return '#%02X%02X%02X' % tuple(tinted)
+
+    @staticmethod
+    def _relative_luminance(color):
+        components = [
+            int(color.lstrip('#')[index:index + 2], 16) / 255.0
+            for index in (0, 2, 4)
+        ]
+        linear = [
+            component / 12.92
+            if component <= 0.04045
+            else ((component + 0.055) / 1.055) ** 2.4
+            for component in components
+        ]
+        return 0.2126 * linear[0] + 0.7152 * linear[1] + 0.0722 * linear[2]
+
+    @classmethod
+    def _contrast_ratio(cls, first_color, second_color):
+        first = cls._relative_luminance(first_color)
+        second = cls._relative_luminance(second_color)
+        lighter, darker = max(first, second), min(first, second)
+        return (lighter + 0.05) / (darker + 0.05)
+
+    @classmethod
+    def _get_contrast_text(cls, background_color):
+        black_ratio = cls._contrast_ratio(background_color, '#000000')
+        white_ratio = cls._contrast_ratio(background_color, '#FFFFFF')
+        return '#000000' if black_ratio >= white_ratio else '#FFFFFF'
+
+    def _get_mobikey_accent_tint(self):
+        """Return an override or blend the accent for calm large-area fills."""
+        self.ensure_one()
+        if self.light_background_color and HEX_COLOR_RE.fullmatch(
+            self.light_background_color
+        ):
+            return self.light_background_color.upper()
+        accent = self._safe_color(self.accent_color, '#D32D49')
+        return self._mix_with_white(accent, 0.30)
 
     def _get_mobikey_accent_stripe(self):
         """Return an extra-light accent tint for alternating specification rows."""
         self.ensure_one()
-        accent = (self.accent_color or '#E9EEF4').lstrip('#')
-        components = [int(accent[index:index + 2], 16) for index in (0, 2, 4)]
-        tinted = [round(component * 0.15 + 255 * 0.85) for component in components]
-        return '#%02X%02X%02X' % tuple(tinted)
+        accent = self._safe_color(self.accent_color, '#D32D49')
+        return self._mix_with_white(accent, 0.15)
 
-    @api.constrains('primary_color', 'accent_color')
+    def _get_mobikey_palette(self):
+        self.ensure_one()
+        primary = self._safe_color(self.primary_color, '#323C48')
+        accent = self._safe_color(self.accent_color, '#D32D49')
+        light_background = self._get_mobikey_accent_tint()
+        light_foreground = primary
+        if self._contrast_ratio(light_background, light_foreground) < 4.5:
+            light_foreground = self._get_contrast_text(light_background)
+        return {
+            'primary': primary,
+            'accent': accent,
+            'body': self._safe_color(self.body_text_color, '#222222'),
+            'muted': self._safe_color(self.muted_text_color, '#666666'),
+            'light_background': light_background,
+            'stripe': self._get_mobikey_accent_stripe(),
+            'separator': '#DADBDF',
+            'primary_foreground': self._get_contrast_text(primary),
+            'accent_foreground': self._get_contrast_text(accent),
+            'light_foreground': light_foreground,
+        }
+
+    @api.depends(
+        'primary_color',
+        'accent_color',
+        'body_text_color',
+        'muted_text_color',
+        'light_background_color',
+    )
+    def _compute_palette_preview(self):
+        for template in self:
+            palette = template._get_mobikey_palette()
+            swatches = [
+                ('Primary', palette['primary'], palette['primary_foreground']),
+                ('Accent', palette['accent'], palette['accent_foreground']),
+                ('Light panel', palette['light_background'], palette['light_foreground']),
+                ('Stripe', palette['stripe'], palette['body']),
+                ('Body', '#FFFFFF', palette['body']),
+                ('Muted', '#FFFFFF', palette['muted']),
+            ]
+            template.palette_preview = Markup('').join(
+                Markup(
+                    '<span style="display:inline-block;min-width:92px;margin:0 6px 6px 0;'
+                    'padding:8px 10px;border:1px solid #DADBDF;border-radius:4px;'
+                    'background:%s;color:%s;font-weight:600">%s</span>'
+                ) % (background, foreground, label)
+                for label, background, foreground in swatches
+            )
+
+    @api.constrains(
+        'primary_color',
+        'accent_color',
+        'body_text_color',
+        'muted_text_color',
+        'light_background_color',
+    )
     def _check_colors(self):
         for template in self:
             invalid = [
                 value
-                for value in (template.primary_color, template.accent_color)
-                if not value or not HEX_COLOR_RE.fullmatch(value)
+                for field_name, value in (
+                    ('primary_color', template.primary_color),
+                    ('accent_color', template.accent_color),
+                    ('body_text_color', template.body_text_color),
+                    ('muted_text_color', template.muted_text_color),
+                    ('light_background_color', template.light_background_color),
+                )
+                if (
+                    field_name in ('primary_color', 'accent_color') and not value
+                ) or (value and not HEX_COLOR_RE.fullmatch(value))
             ]
             if invalid:
                 raise ValidationError(_(
