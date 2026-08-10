@@ -555,6 +555,16 @@ class TestMobikeySaleDocuments(TransactionCase):
             'Signatures' in text and self.customer.name in text
             for text in lead_text
         ))
+        payment_sections = tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-payment-section ')]"
+        )
+        self.assertEqual(len(payment_sections), 1)
+        payment_text = ' '.join(payment_sections[0].text_content().split())
+        self.assertIn('Payment Conditions', payment_text)
+        self.assertIn('Quotation Validity', payment_text)
+        rendered_html = report_html.decode()
+        self.assertIn('display: inline-block', rendered_html)
+        self.assertIn('page-break-inside: avoid !important', rendered_html)
 
     def test_native_terms_override_legacy_terms_and_preserve_html(self):
         quotation_template = self.env['sale.order.template'].create({
@@ -580,10 +590,13 @@ class TestMobikeySaleDocuments(TransactionCase):
         tree = lxml_html.fromstring(report_html)
         native_terms = tree.xpath("//*[@name='order_note']")
         self.assertEqual(len(native_terms), 1)
+        self.assertIn('mobikey-terms-content', native_terms[0].classes)
         self.assertIn('Native quotation terms', native_terms[0].text_content())
         self.assertEqual(len(native_terms[0].xpath('.//ol/li')), 2)
         self.assertNotIn(b'Legacy Mobikey terms must not render.', report_html)
-        self.assertFalse(tree.xpath("//*[contains(@class, 'mobikey-terms')]"))
+        self.assertFalse(tree.xpath(
+            "//*[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-terms ')]"
+        ))
 
     def test_characteristic_rows_are_borderless_and_faintly_striped(self):
         self.env['mobikey.product.specification'].create({
@@ -649,6 +662,9 @@ class TestMobikeySaleDocuments(TransactionCase):
             "//table[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-totals-table ')]"
         )[0]
         self.assertNotIn('border', totals.attrib['style'])
+        totals_block = totals.getparent()
+        self.assertIn('mobikey-totals-block', totals_block.classes)
+        self.assertNotIn('float', totals_block.attrib.get('style', ''))
 
         title = tree.xpath(
             "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-party-column ')][1]/div[1]"
@@ -700,6 +716,14 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertFalse(tree.xpath(
             "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-watermark ')]"
         ))
+        plain_content = tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-report-content ')]"
+        )
+        self.assertEqual(len(plain_content), 1)
+        self.assertNotIn(
+            'mobikey-report-content-watermarked',
+            plain_content[0].classes,
+        )
 
         self.document_template.write({
             'watermark_enabled': True,
@@ -735,6 +759,18 @@ class TestMobikeySaleDocuments(TransactionCase):
             self.assertIn('position: fixed', rendered_html)
             self.assertIn('opacity: 0.10', rendered_html)
             self.assertIn('rotate(-40deg)', rendered_html)
+            pages = tree.xpath(
+                "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-report-page ')]"
+            )
+            self.assertEqual(len(pages), 1)
+            report_content = pages[0].xpath(
+                "./div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-report-content ')]"
+            )
+            self.assertEqual(len(report_content), 1)
+            self.assertIn(
+                'mobikey-report-content-watermarked',
+                report_content[0].classes,
+            )
 
     def test_enabled_watermark_requires_text(self):
         with self.assertRaises(ValidationError):
