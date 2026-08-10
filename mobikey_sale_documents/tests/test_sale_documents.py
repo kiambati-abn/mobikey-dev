@@ -89,10 +89,10 @@ class TestMobikeySaleDocuments(TransactionCase):
         values.update(extra_values)
         return order_model.create(values)
 
-    def test_template_values_and_discount_are_copied(self):
+    def test_template_payment_brand_values_and_discount_are_copied(self):
         order = self._create_order()
 
-        self.assertEqual(order.mobikey_terms_html, self.document_template.terms_html)
+        self.assertFalse(order.mobikey_terms_html)
         self.assertEqual(order.mobikey_bank_account_ids, self.bank_account)
         self.assertEqual(order.mobikey_brand_ids, self.brand)
         self.assertEqual(order.mobikey_discount_total, 200.0)
@@ -492,15 +492,6 @@ class TestMobikeySaleDocuments(TransactionCase):
             payment_term_id=self.env.ref('account.account_payment_term_30days').id,
             validity_date='2026-08-31',
         )
-        order.mobikey_terms_html = (
-            '<div><p>First legal paragraph.</p><p>Second legal paragraph.</p></div>'
-        )
-
-        blocks = order._get_mobikey_terms_blocks()
-        self.assertIn('First legal paragraph.', str(blocks['first']))
-        self.assertNotIn('Second legal paragraph.', str(blocks['first']))
-        self.assertIn('Second legal paragraph.', str(blocks['rest']))
-
         report_html, _report_type = self.env['ir.actions.report']._render_qweb_html(
             'sale.action_report_saleorder',
             order.ids,
@@ -523,13 +514,38 @@ class TestMobikeySaleDocuments(TransactionCase):
             for text in lead_text
         ))
         self.assertTrue(any(
-            'Terms and Conditions' in text and 'First legal paragraph.' in text
-            for text in lead_text
-        ))
-        self.assertTrue(any(
             'Signatures' in text and self.customer.name in text
             for text in lead_text
         ))
+
+    def test_native_terms_override_legacy_terms_and_preserve_html(self):
+        quotation_template = self.env['sale.order.template'].create({
+            'name': 'Native Terms Template',
+            'note': (
+                '<p><strong>Native quotation terms</strong></p>'
+                '<ol><li>First structured clause.</li>'
+                '<li>Second structured clause.</li></ol>'
+            ),
+        })
+        order = self._create_order(
+            sale_order_template_id=quotation_template.id,
+        )
+        order.write({
+            'mobikey_terms_html': '<p>Legacy Mobikey terms must not render.</p>',
+        })
+
+        self.assertEqual(order.note, quotation_template.note)
+        report_html, _report_type = self.env['ir.actions.report']._render_qweb_html(
+            'sale.action_report_saleorder',
+            order.ids,
+        )
+        tree = lxml_html.fromstring(report_html)
+        native_terms = tree.xpath("//*[@name='order_note']")
+        self.assertEqual(len(native_terms), 1)
+        self.assertIn('Native quotation terms', native_terms[0].text_content())
+        self.assertEqual(len(native_terms[0].xpath('.//ol/li')), 2)
+        self.assertNotIn(b'Legacy Mobikey terms must not render.', report_html)
+        self.assertFalse(tree.xpath("//*[contains(@class, 'mobikey-terms')]"))
 
     def test_characteristic_rows_are_borderless_and_faintly_striped(self):
         self.env['mobikey.product.specification'].create({
@@ -582,13 +598,24 @@ class TestMobikeySaleDocuments(TransactionCase):
         header = commercial_tables[0].xpath('.//thead')[0]
         self.assertIn('background: #E5F1DD', header.attrib['style'])
         self.assertIn('color: #305496', header.attrib['style'])
+        self.assertNotIn('border', header.attrib['style'])
         rows = tree.xpath(
             "//tr[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-commercial-item ')]"
         )
         self.assertEqual(len(rows), 2)
         self.assertIn('background: #FFFFFF', rows[0].attrib['style'])
         self.assertIn('background: #F2F8EE', rows[1].attrib['style'])
+        self.assertTrue(all('border' not in row.attrib['style'] for row in rows))
         self.assertTrue(all(row.xpath('./td[contains(@class, "mobikey-number")]') for row in rows))
+        totals = tree.xpath(
+            "//table[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-totals-table ')]"
+        )[0]
+        self.assertNotIn('border', totals.attrib['style'])
+
+        title = tree.xpath(
+            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-party-column ')][1]/div[1]"
+        )[0]
+        self.assertNotIn('border', title.attrib['style'])
 
     def test_native_report_renders_custom_dispatch(self):
         order = self._create_order()

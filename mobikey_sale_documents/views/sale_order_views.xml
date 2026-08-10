@@ -36,9 +36,6 @@
                                    readonly="locked"/>
                         </group>
                     </group>
-                    <group string="Terms and Conditions">
-                        <field name="mobikey_terms_html" widget="html" nolabel="1" readonly="locked"/>
-                    </group>
                 </page>
             </xpath>
 
