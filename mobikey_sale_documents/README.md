@@ -87,8 +87,8 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
 - Printed body text uses a readable 10 pt baseline, borderless two-column product
   characteristics and commercial conditions with faint alternating rows, a shaded
   OBS block, native Odoo terms formatting, and a readable two-line company footer.
-  The footer reserves about 20 mm, has a primary-color separator, and keeps page
-  numbering right aligned.
+  The footer reserves 24 mm, places a clear 3.5 mm gap below its primary-color
+  separator, and keeps page numbering right aligned.
 - The Mobikey preset uses dark slate `#323C48` and red `#D32D49`; the previous blue
   `#305496` and green `#A9D08E` palette remains available as an alternative. Primary
   and accent are the only required colors. Blank body, muted, or light-background

@@ -313,7 +313,7 @@
         </div>
 
         <div t-attf-class="footer o_company_#{company.id}_layout"
-             t-attf-style="min-height: 22mm; padding-top: 4mm; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.3; color: #{body_color}; border: 0 !important; outline: 0 !important; box-shadow: none !important;">
+             t-attf-style="min-height: 24mm; padding-top: 4mm; box-sizing: border-box; font-family: Arial, Helvetica, sans-serif; font-size: 10pt; line-height: 1.35; color: #{body_color}; border: 0 !important; outline: 0 !important; box-shadow: none !important;">
             <style>
                 .mobikey-footer-note,
                 .mobikey-footer-note p {
@@ -348,7 +348,7 @@
                     white-space: nowrap;
                 }
             </style>
-            <div t-attf-style="border-top: 0.35mm solid #{primary_color}; padding-top: 2.25mm;">
+            <div t-attf-style="border-top: 0.35mm solid #{primary_color}; padding-top: 3.5mm;">
                 <div class="mobikey-footer-row">
                     <div class="mobikey-footer-details">
                         <strong style="font-size: 10.5pt;" t-field="company.name"/>
