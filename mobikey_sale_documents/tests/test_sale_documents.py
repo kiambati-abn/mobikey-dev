@@ -645,7 +645,8 @@ class TestMobikeySaleDocuments(TransactionCase):
             proforma_html,
         )
 
-    def test_representative_quotation_and_proforma_pdfs_render(self):
+    def test_representative_report_outputs_render(self):
+        """Exercise the PDF entrypoint, including Odoo's test-mode HTML fallback."""
         second_product = self.product_template.copy({
             'name': 'Second PDF Product',
             'model': 'SECOND PDF MODEL',
@@ -666,23 +667,43 @@ class TestMobikeySaleDocuments(TransactionCase):
             for product in (second_product, third_product)
         ]})
 
-        for report_name in (
-            'sale.action_report_saleorder',
-            'sale.action_report_pro_forma_invoice',
-        ):
-            pdf, report_type = self.env['ir.actions.report']._render_qweb_pdf(
+        expected_markers = {
+            'sale.action_report_saleorder': (
+                b'Description and Product Characteristics',
+                b'SECOND PDF MODEL',
+            ),
+            'sale.action_report_pro_forma_invoice': (
+                b'Proforma Invoice',
+                b'THIRD PDF MODEL',
+            ),
+        }
+        for report_name, markers in expected_markers.items():
+            payload, output_type = self.env['ir.actions.report']._render_qweb_pdf(
                 report_name,
                 order.ids,
             )
-            self.assertEqual(report_type, 'pdf')
-            self.assertTrue(pdf.startswith(b'%PDF'))
+            self.assertIn(output_type, ('pdf', 'html'))
+            if output_type == 'pdf':
+                self.assertTrue(payload.startswith(b'%PDF'))
+            else:
+                self.assertTrue(payload.strip())
+                for marker in markers:
+                    self.assertIn(marker, payload)
 
         native_order = self._create_order(mobikey_document_template_id=False)
-        native_pdf, native_report_type = (
+        native_payload, native_output_type = (
             self.env['ir.actions.report']._render_qweb_pdf(
                 'sale.action_report_saleorder',
                 native_order.ids,
             )
         )
-        self.assertEqual(native_report_type, 'pdf')
-        self.assertTrue(native_pdf.startswith(b'%PDF'))
+        self.assertIn(native_output_type, ('pdf', 'html'))
+        if native_output_type == 'pdf':
+            self.assertTrue(native_payload.startswith(b'%PDF'))
+        else:
+            self.assertTrue(native_payload.strip())
+            self.assertIn(b'Quotation', native_payload)
+            self.assertNotIn(
+                b'Description and Product Characteristics',
+                native_payload,
+            )

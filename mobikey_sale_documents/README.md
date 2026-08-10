@@ -110,9 +110,11 @@ repository on the addons path:
 odoo-bin -d <development_database> -i mobikey_sale_documents --test-enable --stop-after-init
 ```
 
-The automated suite renders representative branded quotation and proforma PDFs,
-plus the native quotation fallback. Before staging or production rollout, also
-render realistic one-, two-, and multi-product documents with long specifications,
-commercial descriptions, payment notes, banks, and terms to visually confirm
-pagination, footer clearance, logo sizing, fonts, tax localization, and the
-configured wkhtmltopdf/Chromium report engine.
+The automated suite exercises the PDF entrypoint for representative branded
+quotation and proforma documents plus the native quotation fallback. Odoo test
+environments that disable PDF conversion return fully rendered HTML from that
+entrypoint; the suite validates that fallback instead. Before staging or production
+rollout, also render realistic one-, two-, and multi-product PDFs with long
+specifications, commercial descriptions, payment notes, banks, and terms to
+visually confirm pagination, footer clearance, logo sizing, fonts, tax localization,
+and the configured wkhtmltopdf/Chromium report engine.
