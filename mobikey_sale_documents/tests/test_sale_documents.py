@@ -419,7 +419,8 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertEqual(len(header.xpath('.//img')), 3)
         self.assertFalse(header.xpath('.//table'))
         self.assertFalse(footer.xpath('.//table'))
-        self.assertIn('min-height: 24mm', footer.attrib['style'])
+        self.assertIn('min-height: 26mm', footer.attrib['style'])
+        self.assertIn('background: #FFFFFF !important', footer.attrib['style'])
         self.assertIn('line-height: 1.35', footer.attrib['style'])
         footer_content = footer.xpath('./div')[0]
         self.assertIn('padding-top: 3.5mm', footer_content.attrib['style'])
@@ -431,7 +432,9 @@ class TestMobikeySaleDocuments(TransactionCase):
         article = tree.xpath(
             "//div[contains(concat(' ', normalize-space(@class), ' '), ' article ')]"
         )[0]
-        self.assertNotIn('Nairobi, Kenya', article.text_content())
+        self.assertIn('Issued By', article.text_content())
+        self.assertIn('Nairobi', article.text_content())
+        self.assertIn('Kenya', article.text_content())
         self.assertIn('Nairobi', footer.text_content())
         self.assertIn('Kenya', footer.text_content())
 
@@ -709,7 +712,7 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertEqual(proforma_report_type, 'html')
         self.assertIn(b'Proforma Invoice', proforma_html)
 
-    def test_optional_watermark_renders_in_custom_reports(self):
+    def test_optional_document_status_renders_in_custom_reports(self):
         self.assertFalse(self.document_template.watermark_enabled)
         self.assertFalse(
             self.document_template._get_mobikey_watermark_text()
@@ -721,16 +724,11 @@ class TestMobikeySaleDocuments(TransactionCase):
         )
         tree = lxml_html.fromstring(html)
         self.assertFalse(tree.xpath(
-            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-watermark ')]"
+            "//*[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-document-status ')]"
         ))
-        plain_content = tree.xpath(
-            "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-report-content ')]"
-        )
-        self.assertEqual(len(plain_content), 1)
-        self.assertNotIn(
-            'mobikey-report-content-watermarked',
-            plain_content[0].classes,
-        )
+        self.assertFalse(tree.xpath(
+            "//*[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-footer-status ')]"
+        ))
 
         self.document_template.write({
             'watermark_enabled': True,
@@ -757,29 +755,27 @@ class TestMobikeySaleDocuments(TransactionCase):
             )
             self.assertEqual(report_type, 'html')
             tree = lxml_html.fromstring(report_html)
-            watermarks = tree.xpath(
-                "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-watermark ')]"
+            title_statuses = tree.xpath(
+                "//*[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-document-status ')]"
             )
-            self.assertEqual(len(watermarks), 1)
-            self.assertEqual(watermarks[0].text_content().strip(), 'Original')
+            footer_statuses = tree.xpath(
+                "//*[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-footer-status ')]"
+            )
+            self.assertEqual(len(title_statuses), 1)
+            self.assertEqual(title_statuses[0].text_content().strip(), 'Original')
+            self.assertEqual(len(footer_statuses), 1)
+            self.assertEqual(footer_statuses[0].text_content().strip(), 'Original')
             rendered_html = report_html.decode()
-            self.assertIn('position: fixed', rendered_html)
-            self.assertIn('opacity: 0.10', rendered_html)
-            self.assertIn('rotate(-40deg)', rendered_html)
+            self.assertNotIn('mobikey-watermark', rendered_html)
+            self.assertNotIn('mobikey-report-content-watermarked', rendered_html)
+            self.assertNotIn('opacity: 0.10', rendered_html)
+            self.assertNotIn('rotate(-40deg)', rendered_html)
             pages = tree.xpath(
                 "//div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-report-page ')]"
             )
             self.assertEqual(len(pages), 1)
-            report_content = pages[0].xpath(
-                "./div[contains(concat(' ', normalize-space(@class), ' '), ' mobikey-report-content ')]"
-            )
-            self.assertEqual(len(report_content), 1)
-            self.assertIn(
-                'mobikey-report-content-watermarked',
-                report_content[0].classes,
-            )
 
-    def test_enabled_watermark_requires_text(self):
+    def test_enabled_document_status_requires_text(self):
         with self.assertRaises(ValidationError):
             self.document_template.write({
                 'watermark_enabled': True,
@@ -800,6 +796,8 @@ class TestMobikeySaleDocuments(TransactionCase):
 
         self.assertEqual(report_type, 'html')
         self.assertNotIn(b'mobikey-watermark', html)
+        self.assertNotIn(b'mobikey-document-status', html)
+        self.assertNotIn(b'mobikey-footer-status', html)
         self.assertNotIn(b'Description and Product Characteristics', html)
         self.assertIn(b'Quotation', html)
 
@@ -811,6 +809,8 @@ class TestMobikeySaleDocuments(TransactionCase):
         )
         self.assertEqual(proforma_report_type, 'html')
         self.assertNotIn(b'mobikey-watermark', proforma_html)
+        self.assertNotIn(b'mobikey-document-status', proforma_html)
+        self.assertNotIn(b'mobikey-footer-status', proforma_html)
         self.assertNotIn(
             b'Description and Product Characteristics',
             proforma_html,

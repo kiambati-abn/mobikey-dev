@@ -20,9 +20,10 @@ templates.
    strategy, visible logo-size choices, color scheme, bank accounts,
    footer, and signatories. Logo sizes are displayed as radio choices in the
    template's **Branding** group. Appearance colors use visual pickers and a live
-   palette preview. An optional text watermark can label every page, for example
-   **Original**, **Copy**, or **Draft**. **Restore Scheme Defaults** returns the
-   selected Mobikey or Blue and Green preset to its maintained values.
+   palette preview. An optional document-status stamp can label the title and
+   every page footer, for example **Original**, **Copy**, or **Draft**. **Restore
+   Scheme Defaults** returns the selected Mobikey or Blue and Green preset to its
+   maintained values.
 
 Only Sales Managers can maintain brands and document templates. Salespeople can
 read and select them.
@@ -51,8 +52,8 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
 ## Important behavior
 
 - Selecting a document template copies its bank accounts, fixed brand choices,
-  and optional watermark to the quotation. They remain editable on the draft
-  quotation, and later template changes do not alter its watermark.
+  and optional document status to the quotation. They remain editable on the draft
+  quotation, and later template changes do not alter its status.
 - Terms and Conditions always use Odoo's native sales-order terms. A selected
   Quotation Template's terms take precedence over company defaults exactly as they
   do in Odoo's standard quotation, and their stored HTML formatting is rendered
@@ -75,8 +76,9 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
   grouped by bank and currency without repeating the bank name.
 - The report header contains logos only. The document summary lists the reference,
   quotation/proforma date, optional validity date, customer reference, and
-  salesperson in that order. Issuer location and legal details are kept in the
-  footer rather than repeated beside the document date.
+  salesperson in that order. A compact **Issued By** block repeats the issuer's
+  legal and contact identity on the first page so it is not available only in the
+  repeating footer.
 - Dealer and manufacturer logo sizes are selectable on each document template.
   Manufacturer **Automatic** sizing is recommended because it caps and wraps
   mixed-brand headers safely. Compact, Standard, and Large options preserve each
@@ -87,8 +89,8 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
 - Printed body text uses a readable 10 pt baseline, borderless two-column product
   characteristics and commercial conditions with faint alternating rows, a shaded
   OBS block, native Odoo terms formatting, and a readable two-line company footer.
-  The footer reserves 24 mm, places a clear 3.5 mm gap below its primary-color
-  separator, and keeps page numbering right aligned.
+  The opaque white footer reserves 26 mm, places a clear 3.5 mm gap below its
+  primary-color separator, and keeps page numbering right aligned.
 - The Mobikey preset uses dark slate `#323C48` and red `#D32D49`; the previous blue
   `#305496` and green `#A9D08E` palette remains available as an alternative. Primary
   and accent are the only required colors. Blank body, muted, or light-background
@@ -99,10 +101,12 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
   stay together as complete print blocks. Native terms retain Odoo's own flowing
   HTML rather than being split or re-serialized by the branded report, with widow
   and orphan protection for page transitions.
-- Optional template watermarks use a restrained diagonal text layer behind the
-  body on every page. The setting is snapshotted onto the quotation when the
-  template is selected. It applies only to the custom Mobikey layout; native Odoo
-  quotations and proformas never receive the watermark.
+- Optional template document statuses use a renderer-safe stamp beside the title
+  and repeat above the reference and page number in every footer. They do not use
+  rotated, transparent, or positioned layers that can obscure paginated content.
+  The setting is snapshotted onto the quotation when the template is selected and
+  applies only to the custom Mobikey layout; native Odoo quotations and proformas
+  never receive the stamp.
 - The normal Odoo report actions and mail templates are not replaced. Uninstalling
   this addon restores standard rendering without leaving rewritten report actions.
 - Bank accounts are restricted to the sales-order company/branch. Templates are

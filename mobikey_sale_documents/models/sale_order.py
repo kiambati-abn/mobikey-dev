@@ -25,12 +25,12 @@ class SaleOrder(models.Model):
         help='Use for promises such as In Stock or Within 3 Months. The commitment date remains available separately.',
     )
     mobikey_watermark_enabled = fields.Boolean(
-        string='Display Watermark',
+        string='Display Document Status',
         copy=True,
-        help='Display the snapshotted watermark on this custom quotation or proforma.',
+        help='Display the snapshotted document status on this custom quotation or proforma.',
     )
     mobikey_watermark_text = fields.Char(
-        string='Watermark Text',
+        string='Document Status',
         copy=True,
         size=32,
         help='Short document-status label copied from the selected document template.',
@@ -146,7 +146,7 @@ class SaleOrder(models.Model):
         vals.setdefault('mobikey_watermark_text', template.watermark_text)
 
     def _get_mobikey_watermark_text(self):
-        """Return normalized snapshotted watermark text for the custom report."""
+        """Return the normalized snapshotted status for the custom report."""
         self.ensure_one()
         if not self.mobikey_watermark_enabled:
             return False
@@ -159,7 +159,7 @@ class SaleOrder(models.Model):
                 order.mobikey_watermark_text or ''
             ).strip():
                 raise ValidationError(_(
-                    'Enter watermark text or disable the watermark.'
+                    'Enter a document status or disable the document status.'
                 ))
 
     @api.constrains(
