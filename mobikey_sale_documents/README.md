@@ -17,7 +17,7 @@ templates.
    Detailed Specifications** to force one for any other product.
 4. In **Sales > Configuration > Proforma Templates**, create a template for a
    company/branch and configure its dealer logo override, manufacturer-logo
-   strategy, visible logo-size choices, color scheme, bank accounts, terms,
+   strategy, visible logo-size choices, color scheme, bank accounts,
    footer, and signatories. Logo sizes are displayed as radio choices in the
    template's **Branding** group. Appearance colors use visual pickers and a live
    palette preview. **Restore Scheme Defaults** returns the selected Mobikey or
@@ -49,8 +49,12 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
 
 ## Important behavior
 
-- Selecting a document template copies its terms, bank accounts, and fixed brand
-  choices to the quotation. They remain editable on the draft quotation.
+- Selecting a document template copies its bank accounts and fixed brand choices
+  to the quotation. They remain editable on the draft quotation.
+- Terms and Conditions always use Odoo's native sales-order terms. A selected
+  Quotation Template's terms take precedence over company defaults exactly as they
+  do in Odoo's standard quotation, and their stored HTML formatting is rendered
+  without custom splitting or typography overrides.
 - Product specifications, description, and warranty are snapshotted on the sales
   line so later product-master edits do not silently change an issued document.
   Empty draft OBS values fall back to the current product Sales Description; the
@@ -79,16 +83,17 @@ override the manufacturer logos on the quotation's **Proforma Details** tab.
   stretches or crops the image.
 - Printed body text uses a readable 10 pt baseline, borderless two-column product
   characteristics and commercial conditions with faint alternating rows, a shaded
-  OBS block, 9 pt terms, and a readable two-line company footer. The footer reserves
-  about 20 mm, has a primary-color separator, and keeps page numbering right aligned.
+  OBS block, native Odoo terms formatting, and a readable two-line company footer.
+  The footer reserves about 20 mm, has a primary-color separator, and keeps page
+  numbering right aligned.
 - The Mobikey preset uses dark slate `#323C48` and red `#D32D49`; the previous blue
   `#305496` and green `#A9D08E` palette remains available as an alternative. Primary
   and accent are the only required colors. Blank body, muted, or light-background
   overrides use safe neutral or generated fallbacks, and foreground text is selected
   for contrast on configurable colored backgrounds.
-- Major headings are grouped with only their first meaningful content block. This
-  prevents orphan headings without forcing long product, commercial, bank, or terms
-  sections onto a new page in their entirety.
+- Structured section headings are grouped with only their first meaningful content
+  block. Native terms retain Odoo's own flowing HTML rather than being split or
+  re-serialized by the branded report.
 - The normal Odoo report actions and mail templates are not replaced. Uninstalling
   this addon restores standard rendering without leaving rewritten report actions.
 - Bank accounts are restricted to the sales-order company/branch. Templates are

@@ -156,9 +156,10 @@ class MobikeyDocumentTemplate(models.Model):
         help='Accounts copied to the sales order when this document template is selected.',
     )
     terms_html = fields.Html(
-        string='Terms and Conditions',
+        string='Legacy Terms and Conditions',
         translate=True,
         sanitize=True,
+        help='Retained for upgrade compatibility. Reports use the native quotation or company terms.',
     )
     footer_note = fields.Html(
         translate=True,

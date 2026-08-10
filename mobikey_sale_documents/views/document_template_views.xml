@@ -125,14 +125,13 @@
                                 </group>
                             </group>
                         </page>
-                        <page string="Banks and Terms" name="banks_terms">
+                        <page string="Payment Banks" name="banks_terms">
                             <group>
                                 <field name="bank_account_ids"
                                        widget="many2many_tags"
                                        domain="[('partner_id', '=', company_partner_id)]"
                                        context="{'default_partner_id': company_partner_id}"/>
                             </group>
-                            <field name="terms_html" widget="html" placeholder="Enter the approved terms and conditions for this company or branch."/>
                         </page>
                         <page string="Signatories" name="signatories">
                             <group>

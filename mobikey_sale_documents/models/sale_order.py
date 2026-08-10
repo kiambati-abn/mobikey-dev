@@ -1,10 +1,6 @@
-from lxml import etree, html as lxml_html
-from markupsafe import Markup, escape
-
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Command
-from odoo.tools import is_html_empty
 
 
 class SaleOrder(models.Model):
@@ -29,9 +25,10 @@ class SaleOrder(models.Model):
         help='Use for promises such as In Stock or Within 3 Months. The commitment date remains available separately.',
     )
     mobikey_terms_html = fields.Html(
-        string='Document Terms and Conditions',
+        string='Legacy Document Terms and Conditions',
         copy=True,
         sanitize=True,
+        help='Retained for upgrade compatibility. Reports use the native sales order Terms and Conditions field.',
     )
     mobikey_bank_account_ids = fields.Many2many(
         'res.partner.bank',
@@ -82,7 +79,6 @@ class SaleOrder(models.Model):
             template = order.mobikey_document_template_id
             if template.company_id and template.company_id != order.company_id:
                 order.mobikey_document_template_id = False
-                order.mobikey_terms_html = False
                 order.mobikey_bank_account_ids = False
                 order.mobikey_brand_ids = False
 
@@ -90,11 +86,9 @@ class SaleOrder(models.Model):
         for order in self:
             template = order.mobikey_document_template_id
             if not template:
-                order.mobikey_terms_html = False
                 order.mobikey_bank_account_ids = False
                 order.mobikey_brand_ids = False
                 continue
-            order.mobikey_terms_html = template.terms_html
             order.mobikey_bank_account_ids = template.bank_account_ids
             order.mobikey_brand_ids = (
                 template.brand_ids if template.brand_source == 'template' else False
@@ -117,14 +111,12 @@ class SaleOrder(models.Model):
         template_id = vals.get('mobikey_document_template_id')
         if not template_id:
             if 'mobikey_document_template_id' in vals:
-                vals.setdefault('mobikey_terms_html', False)
                 vals.setdefault('mobikey_bank_account_ids', [Command.clear()])
                 vals.setdefault('mobikey_brand_ids', [Command.clear()])
             return
         template = self.env['mobikey.document.template'].browse(template_id).exists()
         if not template:
             return
-        vals.setdefault('mobikey_terms_html', template.terms_html)
         vals.setdefault(
             'mobikey_bank_account_ids',
             [Command.set(template.bank_account_ids.ids)],
@@ -196,55 +188,6 @@ class SaleOrder(models.Model):
                 values['mobikey_detail_snapshot'] = line._get_mobikey_live_details()
                 line.write(values)
         return True
-
-    def _get_mobikey_terms_blocks(self):
-        """Split configured terms so the title stays with the first content block."""
-        self.ensure_one()
-        terms = self.mobikey_terms_html
-        if is_html_empty(terms):
-            terms = self.note
-        if is_html_empty(terms):
-            return {'first': False, 'rest': False}
-
-        try:
-            fragments = lxml_html.fragments_fromstring(str(terms))
-        except (etree.ParserError, ValueError):
-            fragments = [str(terms)]
-
-        expanded_fragments = []
-        for fragment in fragments:
-            if (
-                not isinstance(fragment, str)
-                and fragment.tag == 'div'
-                and not fragment.attrib
-                and not (fragment.text or '').strip()
-                and len(fragment)
-            ):
-                expanded_fragments.extend(fragment)
-            else:
-                expanded_fragments.append(fragment)
-
-        blocks = []
-        for fragment in expanded_fragments:
-            if isinstance(fragment, str):
-                content = fragment.strip()
-                if content:
-                    blocks.append('<p>%s</p>' % escape(content))
-                continue
-            content = lxml_html.tostring(
-                fragment,
-                encoding='unicode',
-                method='html',
-            ).strip()
-            if content and not is_html_empty(content):
-                blocks.append(content)
-
-        if not blocks:
-            return {'first': False, 'rest': False}
-        return {
-            'first': Markup(blocks[0]),
-            'rest': Markup('').join(Markup(block) for block in blocks[1:]) or False,
-        }
 
     def _get_mobikey_bank_groups(self):
         """Group payment accounts by bank for a compact multi-currency layout."""
