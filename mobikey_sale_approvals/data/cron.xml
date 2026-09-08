@@ -1,0 +1,11 @@
+<odoo noupdate="1">
+  <record id="approval_reminder_cron" model="ir.cron"><field name="name">Mobikey: overdue approval reminders</field><field name="model_id" ref="model_mobikey_sale_approval"/><field name="state">code</field><field name="code">model._cron_remind()</field><field name="interval_number">1</field><field name="interval_type">days</field></record>
+  <record id="commission_cron" model="ir.cron"><field name="name">Mobikey: eligible commission approvals</field><field name="model_id" ref="sale.model_sale_order"/><field name="state">code</field><field name="code">model._cron_commission()</field><field name="interval_number">1</field><field name="interval_type">days</field></record>
+  <record id="forecast_snapshot_cron" model="ir.cron">
+    <field name="name">Mobikey: daily forecast snapshot</field>
+    <field name="model_id" ref="model_mobikey_forecast_snapshot"/>
+    <field name="state">code</field><field name="code">model._cron_snapshot()</field>
+    <field name="interval_number">1</field><field name="interval_type">days</field>
+    <field name="active" eval="True"/>
+  </record>
+</odoo>

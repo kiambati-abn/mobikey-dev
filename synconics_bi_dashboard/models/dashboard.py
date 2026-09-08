@@ -471,99 +471,43 @@ class Dashboard(models.Model):
         return {"type": "success"}
 
     def send_email(self, chartData):
-        """
-        Send dashboard charts emails to users
-        """
         self.ensure_one()
-        if self.created_menu_id:
-            dashboard_emails = self.dashboard_mail_ids.filtered(
-                lambda dmid: dmid.is_automated
-            )
-            if not dashboard_emails:
-                return False
-            for mail in dashboard_emails:
-                items = []
-                charts = mail.chart_ids
-                for chart in charts:
-                    chart_dict = {}
-                    if chart.chart_type in ["kpi", "tile"]:
-                        chart_dict = {
-                            "chart_id": chart.id,
-                            "name": chart.name,
-                            "image": chart.html_to_image(),
-                        }
-                    else:
-                        chart_data = chart.get_chart_data(chart.chart_type, chart.name)
-                        chart_dict = {
-                            "chart_id": chart.id,
-                            "chart_type": chart.chart_type,
-                            "name": chart.name,
-                        }
-                        if "default_icon" in chart_data and chart_data.get(
-                            "default_icon"
-                        ):
-                            chart_data.update(
-                                {"kpi_icon": Markup(chart_data.get("default_icon"))}
-                            )
-                        chart_dict.update(chart_data)
-                    items.append(chart_dict)
-                self.send_mail_to_users(mail, items)
-            return True
+        return self.scheduled_send_email(self.id)
 
     def send_mail_to_users(self, mail, items):
-        """
-        Send chart emails to users
-        """
-        emails = mail.recipient_ids.ids
-        base_url = self.env["ir.config_parameter"].sudo().get_param("web.base.url")
-        url = "%s/web#db=%s&menu_id=%s&action_id=%s" % (
-            base_url,
-            self.env.cr.dbname,
-            self.created_menu_id.id,
-            self.created_action_id.id,
-        )
-        mail.mail_template_id.with_context(
-            data=items,
-            url=url,
-            email_to=str(emails)[1:-1],
-            name=self.name,
-        ).send_mail(self.id, force_send=True)
+        return self._send_access_links(mail.recipient_ids)
+
+    def _send_access_links(self, partners):
+        self.ensure_one()
+        self.check_access('read')
+        mails = self.env['mail.mail'].sudo()
+        base_url = self.env['ir.config_parameter'].sudo().get_param('web.base.url')
+        for partner in partners:
+            users = partner.user_ids.filtered(lambda u: u.active and not u.share)
+            if not any(self.with_user(user).has_access('read') for user in users):
+                continue
+            url = (f"{base_url}/odoo/action-{self.created_action_id.id}" if self.created_action_id
+                   else f"{base_url}/odoo/dashboard.dashboard/{self.id}")
+            mails |= self.env['mail.mail'].sudo().create({
+                'subject': _('Dashboard available: %s', self.name),
+                'body_html': Markup('<p><a href="%s">Open your dashboard</a></p>') % url,
+                'email_from': self.env.company.partner_id.email_formatted or self.env.user.email_formatted,
+                'email_to': False, 'email_cc': False, 'recipient_ids': [(6, 0, partner.ids)],
+            })
+        return mails
 
     def scheduled_send_email(self, dashboard_id):
-        """
-        Send charts email to users
-        """
-        dashboard = self.browse(dashboard_id)
-        composer = self.env["mail.compose.message"].sudo()
-        ctx = {
-            "default_model": "dashboard.dashboard",
-            "default_res_ids": dashboard.ids,
-            "default_composition_mode": "comment",
-            "default_dashboard_id": dashboard.id,
-            "default_email_layout_xmlid": "mail.mail_notification_layout_with_responsible_signature",
-            "email_notification_allow_footer": True,
-            "emailData": {},
-        }
+        """Send a login-required link, never a privileged rendered financial attachment.
 
-        if len(self) > 1:
-            ctx["default_composition_mode"] = "mass_mail"
-        else:
-            ctx.update(
-                {
-                    "force_email": True,
-                    "model_description": "Dashboard Email",
-                }
-            )
-        if dashboard:
-            for mail in dashboard.dashboard_mail_ids.filtered(lambda m: m.is_automated):
-                composer_id = composer.with_context(**ctx).create(
-                    {"dashboard_id": dashboard.id}
-                )
-                composer_id.onchange_dashboard_id()
-                composer_id.dashboard_mail_id = mail.id
-                composer_id.onchange_dashboard_mail_id()
-                composer_id.action_send_mail()
-
+        The recipient opens the dashboard with their own record and field permissions.
+        This also secures existing root-owned scheduled jobs without trusting their owner.
+        """
+        dashboard = self.browse(dashboard_id).exists()
+        if not dashboard:
+            return False
+        dashboard.check_access('read')
+        for mailing in dashboard.dashboard_mail_ids.filtered('is_automated'):
+            dashboard._send_access_links(mailing.recipient_ids)
         return True
 
     @api.model_create_multi
@@ -581,7 +525,7 @@ class Dashboard(models.Model):
                     ).id,
                     "state": "code",
                     "code": """model.scheduled_send_email(%s)""" % (rec.id),
-                    "user_id": self.env.ref("base.user_root").id,
+                    "user_id": self.env.uid,
                     "interval_number": 1,
                     "interval_type": "days",
                 }

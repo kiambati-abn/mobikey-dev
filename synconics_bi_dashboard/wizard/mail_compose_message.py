@@ -130,3 +130,10 @@ class MailComposeMessage(models.TransientModel):
             items.append(chart_dict)
         context.update({"data": items})
         self.env = self.env(context=context)
+
+    def _action_send_mail(self, auto_commit=False):
+        dashboards = self.filtered('dashboard_id')
+        other_mails, messages = super(MailComposeMessage, self - dashboards)._action_send_mail(auto_commit=auto_commit)
+        for wizard in dashboards:
+            other_mails |= wizard.dashboard_id._send_access_links(wizard.partner_ids)
+        return other_mails, messages

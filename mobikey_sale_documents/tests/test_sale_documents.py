@@ -11,6 +11,10 @@ class TestMobikeySaleDocuments(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        # These fixtures exercise editable draft report layouts. The approvals
+        # addon separately tests its stricter customer-issue checkpoint.
+        if 'mobikey_approval_checkpoint' in cls.env.company._fields:
+            cls.env.company.mobikey_approval_checkpoint = 'confirm'
         cls.customer = cls.env['res.partner'].create({
             'name': 'Document Test Customer',
         })

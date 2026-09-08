@@ -61,7 +61,7 @@ clear and actionable insights for reporting, KPI tracking, and analysis.
     "author": "Synconics Technologies Pvt. Ltd.",
     "website": "https://www.synconics.com",
     "category": "web",
-    "version": "1.0.3",
+    "version": "19.0.1.0.4",
     "depends": ["web", "mail"],
     "external_dependencies": {"python": ["imgkit"]},
     "assets": {
