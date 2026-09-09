@@ -1,5 +1,6 @@
 from odoo import Command
 from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.modules.loading import force_demo
 from odoo.tests import TransactionCase, tagged, new_test_user
 
 
@@ -163,6 +164,14 @@ class TestQuotationWorkflow(TransactionCase):
             'state': 'sent',
         })
         self.assertEqual(order.state, 'sent')
+
+    def test_force_demo_loads_with_approval_workflow(self):
+        force_demo(self.env)
+        self.assertTrue(self.env.ref('sale.sale_order_4').exists())
+        self.assertTrue(self.env.ref('sale_management.sale_order_template_1').exists())
+        self.assertTrue(self.env.ref(
+            'sale_pdf_quote_builder.sale_pdf_header_demo_page'
+        ).exists())
 
     def test_confirmation_preserves_quotation_pricing_date(self):
         order = self.quote(date_order='2026-01-15 10:00:00')
