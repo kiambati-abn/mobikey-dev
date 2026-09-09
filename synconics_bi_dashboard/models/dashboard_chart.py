@@ -1276,7 +1276,7 @@ class DashboardChart(models.Model):
             return safe_eval(domain_string, eval_context)
         except Exception as e:
             _logger.warning(f"Failed to evaluate domain: {domain_string}, Error: {e}")
-            return []
+            raise ValidationError(_("Invalid dashboard filter. Correct the domain before loading results.")) from e
 
     def get_chart_data(
         self,
@@ -1838,17 +1838,27 @@ class DashboardChart(models.Model):
                 lambda arft: not getattr(arft, conf_obj.sort_field)
             )
             all_records = sorted_record
-        if conf_obj.limit_record > 0:
-            all_records = all_records[: conf_obj.limit_record]
-
+        # Tiles describe the complete filtered population; display limits apply to rankings only.
         count = 0
         if conf_obj.data_type == "count":
             count = len(all_records)
         elif conf_obj.data_type in ["sum", "average"]:
-            count_list = [
-                getattr(record, conf_obj.measurement_field_id.name)
-                for record in all_records
-            ]
+            measure = conf_obj.measurement_field_id.name
+            count_list = []
+            company = self.env["res.company"].browse(conf_obj.company) or self.env.company
+            for record in all_records:
+                value = record[measure]
+                field = record._fields[measure]
+                if field.type == 'monetary' or (conf_obj.show_unit and conf_obj.unit_type == "monetary"):
+                    currency_field = getattr(field, "currency_field", None)
+                    currency = record[currency_field] if currency_field else (
+                        record.company_id.currency_id if "company_id" in record._fields else False)
+                    if not currency:
+                        raise ValidationError(_("A monetary tile requires a defined source currency."))
+                    rate_date = record[conf_obj.date_filter_field] if conf_obj.date_filter_field else fields.Date.today()
+                    value = currency._convert(value, company.currency_id, company,
+                                              fields.Date.to_date(rate_date) or fields.Date.today())
+                count_list.append(value)
             count = sum(count_list)
             if conf_obj.data_type == "average" and count != 0:
                 count /= len(count_list)
@@ -1933,18 +1943,10 @@ class DashboardChart(models.Model):
             if isinstance(updated_data, dict):
                 standard = round(updated_data.get("calculated_count"), 2)
                 if conf_obj.previous_period_type == "percentage":
-                    standard = (
-                        str(
-                            round(
-                                (updated_data.get("calculated_count") * 100)
-                                / prepared_data.get("calculated_count"),
-                                2,
-                            )
-                        )
-                        + "%"
-                        if prepared_data.get("calculated_count")
-                        else "0 %"
-                    )
+                    previous = updated_data.get("calculated_count", 0)
+                    current = prepared_data.get("calculated_count", 0)
+                    standard = (f"{round((current - previous) / previous * 100, 2)}%"
+                                if previous else "0%" if not current else _("N/A (no baseline)"))
                 elif conf_obj.show_unit:
                     if conf_obj.unit_type == "monetary":
                         record_obj = self.env[conf_obj.model]

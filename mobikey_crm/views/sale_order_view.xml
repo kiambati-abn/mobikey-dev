@@ -1,46 +1,15 @@
-<?xml version="1.0" encoding="utf-8"?>
+<?xml version='1.0' encoding='utf-8'?>
 <odoo>
-    <record id="view_sale_order_form_inherit_vehicle_condition" model="ir.ui.view">
-        <field name="name">sale.order.form.vehicle.condition</field>
-        <field name="model">sale.order</field>
-        <field name="inherit_id" ref="sale.view_order_form"/>
-        <field name="arch" type="xml">
-
-            <!-- Add after vehicle_condition -->
-            <xpath expr="//field[@name='sale_order_template_id']" position="after">
-                <field name="deal_type"/>
-                <field name="customer_type"/>
-                <field name="vehicle_condition"/>
-            </xpath>
-
-            <!-- Add after Unit Price -->
-<!--         <xpath expr="//field[@name='order_line']/list/field[@name='price_unit']" position="after">-->
-<!--            <field name="margin" string="Margin %" optional="show"/>-->
-<!--        </xpath>-->
-
-            <xpath expr="//form//sheet" position="inside">
-                <!-- Margin Warning Ribbon -->
-                <widget name="web_ribbon"
-                        title="Margin Warning!"
-                        bg_color="bg-danger"
-                        invisible="not margin_warning"/>
-            </xpath>
-
-            <xpath expr="//notebook" position="before">
-                <div class="alert alert-warning mb-2"
-                     role="alert"
-                     invisible="margin_warning == False">
-                    <strong><i class="fa fa-exclamation-triangle me-1"/> Margin Warning</strong>
-                    <field name="margin_warning_msg" readonly="1" nolabel="1"
-                           style="white-space: pre-line; margin: 4px 0 0 0; display: block;"/>
-                </div>
-            </xpath>
-
-
-
-        </field>
-    </record>
-
-
-
+  <record id="view_sale_order_form_inherit_vehicle_condition" model="ir.ui.view">
+    <field name="name">sale.order.form.vehicle.condition</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_order_form" />
+    <field name="arch" type="xml">
+      <xpath expr="//field[@name='sale_order_template_id']" position="after">
+        <field name="deal_type" />
+        <field name="customer_type" />
+        <field name="vehicle_condition" />
+      </xpath>
+    </field>
+  </record>
 </odoo>
