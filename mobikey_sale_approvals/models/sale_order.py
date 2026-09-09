@@ -279,7 +279,8 @@ class SaleOrder(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        if any(vals.get('state', 'draft') != 'draft' for vals in vals_list):
+        loading_demo = self.env.su and self.env.context.get('install_demo')
+        if not loading_demo and any(vals.get('state', 'draft') != 'draft' for vals in vals_list):
             raise UserError(_('Create a draft quotation, then use the normal send or confirmation action.'))
         if any(CONTROLLED.intersection(vals) for vals in vals_list) and not self.env.su:
             raise AccessError(_('Approval control fields are managed by workflow actions.'))

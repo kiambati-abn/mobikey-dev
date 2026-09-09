@@ -151,6 +151,18 @@ class TestQuotationWorkflow(TransactionCase):
     def test_direct_state_create_is_not_an_approval_bypass(self):
         with self.assertRaises(UserError):
             self.quote((10,), state='sale')
+        with self.assertRaises(UserError):
+            self.env['sale.order'].with_user(self.sales).with_context(install_demo=True).create({
+                'partner_id': self.partner.id,
+                'state': 'sent',
+            })
+
+    def test_odoo_demo_loader_can_create_non_draft_orders(self):
+        order = self.env['sale.order'].sudo().with_context(install_demo=True).create({
+            'partner_id': self.partner.id,
+            'state': 'sent',
+        })
+        self.assertEqual(order.state, 'sent')
 
     def test_confirmation_preserves_quotation_pricing_date(self):
         order = self.quote(date_order='2026-01-15 10:00:00')
