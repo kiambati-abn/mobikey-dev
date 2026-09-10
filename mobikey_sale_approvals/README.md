@@ -6,11 +6,11 @@ An exception quotation follows **prepare → submit → approve → issue → co
 
 ## Company configuration
 
-Under **Settings → Companies → Sales approvals**, set the amount basis, approval checkpoint, trade-in policy/threshold and assigned internal approvers. An assignment is valid only when the user has the requisite role and access to that company. Higher roles can be assigned to a lower-level approval. Country Director is retained only as a legacy group for membership review; the active hierarchy is Sales Manager → Country GM → HQ, with Finance separate.
+Under **Settings → Companies → Sales approvals**, set the Sales Manager discount limit, Country GM discount limit, minimum acceptable margin, amount basis, approval checkpoint, trade-in policy/threshold and assigned internal approvers. Defaults are 2%, 5% and 20% respectively. Discounts above the GM limit route to HQ; margins below the company minimum route to the Country GM. An assignment is valid only when the user has the requisite role and access to that company. Higher roles can be assigned to a lower-level approval. Country Director is retained only as a legacy group for membership review; the active hierarchy is Sales Manager → Country GM → HQ, with Finance separate.
 
 The implementation defaults to tax-inclusive forecast revenue, approval before customer issue and confirmation, and either GM or Finance for high-value trade-ins. These are configurable recommendations, not confirmed production policy. Trade-in submission requires explicit threshold verification. Commission eligibility stays disabled until the company selects confirmation, full invoicing or full payment. Approval deadlines default to three days and can be changed per company.
 
-Costs, target margins, cost snapshots, reconditioning costs, supplier prices, inventory valuation and margin measures require **Financial cost and margin visibility**. GM/HQ/Finance and system administrators inherit it; Sales Manager does not. Calculations run internally without granting that permission to salespeople. Reconditioning cost is a total per quotation line, allocated once. Product cost and target margin are snapshotted; master-data edits do not silently change a submitted offer.
+Costs, threshold snapshots, legacy product target margins, reconditioning costs, supplier prices, inventory valuation and margin measures require **Financial cost and margin visibility**. GM/HQ/Finance and system administrators inherit it; Sales Manager does not. Calculations run internally without granting that permission to salespeople. Reconditioning cost is a total per quotation line, allocated once. Company discount and margin thresholds are snapshotted at submission; later configuration changes apply to new or revised submissions without silently changing a submitted offer. Product target margins remain only as historical compatibility fields.
 
 ## Forecast and reporting
 
@@ -18,7 +18,7 @@ The first linked quotation becomes the opportunity's primary quotation. Alternat
 
 **Sales → Reporting → Forecast history** holds daily immutable snapshots. **Approval turnaround** reports decisions by category/status and elapsed hours. Native CRM reporting supplies stage history and weighted forecasting. The lead form shows operating country separately from customer geography and a qualification readiness summary.
 
-Approval emails use explicit internal recipients, queued delivery and revision-based deduplication. Margin requests activate after discount approval. Resolved/withdrawn requests close their activities; overdue requests receive at most one reminder per day. Dashboard sharing emails contain login-required links so each recipient opens the report with their own permissions.
+Approval notifications use explicit internal recipients and each user's Odoo notification preference. Every workflow event is logged on both the quotation and approval chatter, while only the quotation event notifies recipients. Margin requests activate after discount approval. Resolved/withdrawn requests close their activities; overdue requests receive at most one reminder per day. Dashboard sharing emails contain login-required links so each recipient opens the report with their own permissions.
 
 ## Coordinated installation / upgrade
 

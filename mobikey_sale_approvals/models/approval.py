@@ -32,6 +32,7 @@ class SaleApproval(models.Model):
     decided_at = fields.Datetime()
     deadline = fields.Date()
     turnaround_hours = fields.Float(compute='_compute_turnaround', store=True)
+    can_decide = fields.Boolean(compute='_compute_can_decide')
     change_request = fields.Text(string='Reason for requested changes',
         help='Customer-safe explanation; never include costs or margins.')
 
@@ -44,6 +45,23 @@ class SaleApproval(models.Model):
             rec.turnaround_hours = ((rec.decided_at - rec.requested_at).total_seconds() / 3600
                                     if rec.decided_at else 0)
 
+    @api.depends_context('uid')
+    @api.depends('status', 'revision', 'notified_at', 'assigned_user_ids',
+                 'order_id.approval_revision')
+    def _compute_can_decide(self):
+        user = self.env.user
+        for approval in self:
+            administrator = approval.category == 'commission' and user.has_group('base.group_system')
+            approval.can_decide = bool(
+                approval.status == 'pending'
+                and approval.notified_at
+                and approval.revision == approval.order_id.approval_revision
+                and (administrator or (
+                    user in approval.assigned_user_ids
+                    and user in approval.company_id._mobikey_approvers(approval.authority)
+                ))
+            )
+
     @api.model_create_multi
     def create(self, vals_list):
         if not self.env.su:
@@ -52,9 +70,7 @@ class SaleApproval(models.Model):
 
     def write(self, vals):
         if not self.env.su:
-            if set(vals) - {'change_request'}:
-                raise AccessError(_('Use the approval decision actions.'))
-            self._check_decision_authority()
+            raise AccessError(_('Use the approval decision actions.'))
         return super().write(vals)
 
     def unlink(self):
@@ -85,8 +101,27 @@ class SaleApproval(models.Model):
         return self._decide('approved')
 
     def action_request_changes(self):
-        if any(not a.change_request for a in self):
+        self.ensure_one()
+        self._check_decision_authority()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Request changes'),
+            'res_model': 'mobikey.sale.approval.request.changes',
+            'view_mode': 'form',
+            'view_id': self.env.ref(
+                'mobikey_sale_approvals.approval_request_changes_form'
+            ).id,
+            'target': 'new',
+            'context': {'default_approval_id': self.id},
+        }
+
+    def _request_changes(self, reason):
+        self.ensure_one()
+        reason = (reason or '').strip()
+        if not reason:
             raise UserError(_('Enter a customer-safe explanation for the requested changes.'))
+        self._check_decision_authority()
+        self.sudo().write({'change_request': reason})
         return self._decide('rejected')
 
     def _decide(self, decision):
@@ -94,8 +129,11 @@ class SaleApproval(models.Model):
         self.invalidate_recordset()
         self._check_decision_authority()
         for approval in self:
-            approval.sudo().write({'status': decision, 'decided_by': self.env.uid,
-                                   'decided_at': fields.Datetime.now()})
+            approval.sudo().with_context(tracking_disable=True).write({
+                'status': decision,
+                'decided_by': self.env.uid,
+                'decided_at': fields.Datetime.now(),
+            })
             approval._close_activities()
             approval._notify_outcome(decision)
             approval.order_id._activate_approvals()
@@ -126,6 +164,22 @@ class SaleApproval(models.Model):
             notify_skip_followers=True,
         )
 
+    def _post_approval_update(self, body, author=None):
+        """Mirror the durable audit message without sending a second notification."""
+        self.ensure_one()
+        author = author or self.env.user
+        return self.sudo().message_post(
+            author_id=author.partner_id.id,
+            body=body,
+            subtype_xmlid='mail.mt_note',
+            notify_skip_followers=True,
+        )
+
+    def _post_workflow_update(self, body, users=None, author=None):
+        self.ensure_one()
+        self._post_approval_update(body, author=author)
+        return self._post_order_update(body, users=users, author=author)
+
     def _notify_users(self, users, subject, body):
         """Send a preference-aware notification without logging routine reminders."""
         self.ensure_one()
@@ -150,9 +204,16 @@ class SaleApproval(models.Model):
         url = self.get_base_url() + '/odoo/mobikey.sale.approval/' + str(self.id)
         body = Markup(
             '<p>Quotation <strong>%s</strong>, revision %s, requires %s approval.</p>'
+            '<p><strong>Assigned to:</strong> %s</p>'
             '<p><a href="%s">Open approval</a></p>'
-        ) % (self.order_id.name, self.revision, self._category_label(), url)
-        self._post_order_update(body, self.assigned_user_ids, author=self.requested_by)
+        ) % (
+            self.order_id.name,
+            self.revision,
+            self._category_label(),
+            ', '.join(self.assigned_user_ids.mapped('name')),
+            url,
+        )
+        self._post_workflow_update(body, self.assigned_user_ids, author=self.requested_by)
         self.sudo().write({'notified_at': fields.Datetime.now()})
 
     def _notify_outcome(self, decision):
@@ -160,22 +221,23 @@ class SaleApproval(models.Model):
         label = self._category_label()
         if decision == 'rejected':
             body = Markup(
-                '<p>Changes were requested for %s approval on quotation <strong>%s</strong>, revision %s.</p>'
+                '<p>%s requested changes for %s approval on quotation <strong>%s</strong>, revision %s.</p>'
                 '<p><strong>Reason:</strong> %s</p>'
-            ) % (label, self.order_id.name, self.revision, self.change_request)
+            ) % (self.decided_by.name, label, self.order_id.name, self.revision, self.change_request)
         else:
             ready = self.category != 'commission' and all(
                 approval.status == 'approved' for approval in self.order_id._current_approvals()
             )
             body = Markup(
-                '<p>%s approval was approved for quotation <strong>%s</strong>, revision %s.</p>%s'
+                '<p>%s approved %s approval for quotation <strong>%s</strong>, revision %s.</p>%s'
             ) % (
+                self.decided_by.name,
                 label,
                 self.order_id.name,
                 self.revision,
                 Markup('<p>The quotation is ready for customer issue.</p>') if ready else Markup(),
             )
-        self._post_order_update(body, self.requested_by | self.order_id.user_id)
+        self._post_workflow_update(body, self.requested_by | self.order_id.user_id)
 
     def _close_activities(self):
         # Decision details are logged separately using customer-safe wording.

@@ -30,7 +30,7 @@
               <field name="industry_type" />
               <field name="is_fleet_customer" />
               <field name="sales_region" />
-              <field name="preferred_language" />
+              <field name="preferred_language" readonly="0" />
             </group>
             <group invisible="type != 'lead'">
               <field name="lead_status" />

@@ -19,6 +19,7 @@ class CrmLead(models.Model):
         selection=[('en', 'English'), ('sw', 'Swahili')],
         string="Preferred Language",
         default='en',
+        tracking=True,
     )
 
     customer_type = fields.Many2one(

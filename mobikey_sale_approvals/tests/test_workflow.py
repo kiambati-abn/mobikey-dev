@@ -36,6 +36,30 @@ class TestQuotationWorkflow(TransactionCase):
             self.assertEqual(order._approval_requirements().get('discount'), role)
         self.assertEqual(self.quote((1, 10))._approval_requirements()['discount'], 'hq')
 
+        self.env.company.write({
+            'mobikey_sm_discount_limit': 3,
+            'mobikey_gm_discount_limit': 7,
+        })
+        self.assertEqual(self.quote((3,))._approval_requirements()['discount'], 'sm')
+        self.assertEqual(self.quote((3.01,))._approval_requirements()['discount'], 'gm')
+        self.assertEqual(self.quote((7.01,))._approval_requirements()['discount'], 'hq')
+
+    def test_company_threshold_validation_and_margin(self):
+        self.product.target_margin = 60
+        order = self.quote()
+        self.assertNotIn('margin', order._approval_requirements())
+        self.env.company.mobikey_minimum_margin = 45
+        self.assertEqual(order._approval_requirements()['margin'], 'gm')
+        order.order_line.price_unit = 500
+        self.assertEqual(order._approval_requirements()['margin'], 'gm')
+        with self.assertRaises(ValidationError):
+            self.env.company.write({
+                'mobikey_sm_discount_limit': 6,
+                'mobikey_gm_discount_limit': 5,
+            })
+        with self.assertRaises(ValidationError):
+            self.env.company.mobikey_minimum_margin = 101
+
     def test_native_stages_do_not_cancel_pending_quote(self):
         lead = self.env['crm.lead'].create({'name': 'Opportunity', 'type': 'opportunity', 'user_id': self.sales.id, 'company_id': self.env.company.id})
         order = self.quote((10,), opportunity_id=lead.id)
@@ -114,6 +138,7 @@ class TestQuotationWorkflow(TransactionCase):
         order = self.quote((10,))
         before = order.message_ids
         order.action_submit_approvals()
+        approval = order.sudo().approval_ids
         first = order.message_ids - before
         order.action_submit_approvals()
         after = order.message_ids - before
@@ -122,30 +147,49 @@ class TestQuotationWorkflow(TransactionCase):
         self.assertEqual(len(requests), 1)
         self.assertEqual(requests.partner_ids, self.hq.partner_id)
         self.assertNotIn(self.partner, after.partner_ids)
+        self.assertTrue(any('requires Discount approval' in message.body
+                            for message in approval.message_ids))
 
-        approval = order.sudo().approval_ids
         before_decision = order.message_ids
+        before_approval_decision = approval.message_ids
         approval.with_user(self.hq).action_approve()
         outcome = (order.message_ids - before_decision).filtered(
-            lambda message: 'Discount approval was approved' in message.body
+            lambda message: 'approved Discount approval' in message.body
         )
         self.assertEqual(len(outcome), 1)
         self.assertIn(self.sales.partner_id, outcome.partner_ids)
         self.assertNotIn(self.partner, outcome.partner_ids)
+        mirrored = approval.message_ids - before_approval_decision
+        self.assertTrue(any('approved Discount approval' in message.body for message in mirrored))
+        self.assertFalse(mirrored.partner_ids)
 
     def test_change_request_is_logged_and_sent_to_submitter(self):
         order = self.quote((10,))
         order.action_submit_approvals()
         approval = order.sudo().approval_ids.with_user(self.hq)
-        approval.change_request = 'Please confirm the customer-facing trade terms.'
+        action = approval.action_request_changes()
+        self.assertEqual(action['res_model'], 'mobikey.sale.approval.request.changes')
         before = order.message_ids
-        approval.action_request_changes()
+        wizard = self.env['mobikey.sale.approval.request.changes'].with_user(self.hq).create({
+            'approval_id': approval.id,
+            'reason': 'Please confirm the customer-facing trade terms.',
+        })
+        wizard.action_confirm()
         outcome = (order.message_ids - before).filtered(
-            lambda message: 'Changes were requested for Discount approval' in message.body
+            lambda message: 'requested changes for Discount approval' in message.body
         )
         self.assertEqual(len(outcome), 1)
         self.assertIn('Please confirm the customer-facing trade terms.', outcome.body)
         self.assertIn(self.sales.partner_id, outcome.partner_ids)
+        with self.assertRaises(AccessError):
+            approval.write({'change_request': 'Changed after decision'})
+
+    def test_change_request_dialog_requires_reason(self):
+        order = self.quote((10,))
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids.with_user(self.hq)
+        with self.assertRaises(UserError):
+            approval._request_changes('   ')
 
     def test_trade_in_financing_and_missing_assignment(self):
         term = self.env['account.payment.term'].create({'name': 'Finance term', 'financing_required': True})
@@ -156,6 +200,59 @@ class TestQuotationWorkflow(TransactionCase):
         self.env.company.mobikey_finance_ids = False
         with self.assertRaises(UserError):
             order.action_submit_approvals()
+
+    def test_financing_and_policy_are_snapshotted(self):
+        term = self.env['account.payment.term'].create({
+            'name': 'Snapshot finance term',
+            'financing_required': True,
+        })
+        order = self.quote((1,), payment_term_id=term.id)
+        order.action_submit_approvals()
+        self.assertEqual(order.sudo().approval_policy_snapshot['discount_sm_limit'], 2.0)
+        self.assertTrue(order.financing_approval_required)
+        self.env.company.write({
+            'mobikey_sm_discount_limit': 0.5,
+            'mobikey_gm_discount_limit': 4,
+            'mobikey_minimum_margin': 30,
+        })
+        term.financing_required = False
+        self.assertEqual(order._approval_requirements()['discount'], 'sm')
+        self.assertIn('financing', order._approval_requirements())
+        self.assertTrue(order.financing_approval_required)
+        order.action_revise_quotation()
+        self.assertFalse(order.sudo().approval_policy_snapshot)
+        self.assertEqual(order._approval_requirements()['discount'], 'gm')
+        self.assertNotIn('financing', order._approval_requirements())
+
+    def test_top_actions_and_multiple_current_approvals(self):
+        order = self.quote((1,))
+        order.action_submit_approvals()
+        self.assertEqual(order.with_user(self.sm).my_actionable_approval_count, 1)
+        order.with_user(self.sm).action_approve_current()
+        self.assertEqual(order.sudo().approval_ids.status, 'approved')
+
+        term = self.env['account.payment.term'].create({
+            'name': 'Multiple finance term',
+            'financing_required': True,
+        })
+        multiple = self.quote(
+            trade_in=True,
+            trade_in_valuation=2000,
+            payment_term_id=term.id,
+        )
+        multiple.action_submit_approvals()
+        self.assertEqual(multiple.with_user(self.finance).my_actionable_approval_count, 2)
+        action = multiple.with_user(self.finance).action_review_my_approvals()
+        self.assertEqual(action['domain'], [('id', 'in', multiple.with_user(self.finance)._my_actionable_approvals().ids)])
+
+    def test_preferred_language_is_editable_and_tracked(self):
+        lead = self.env['crm.lead'].with_user(self.sales).create({
+            'name': 'Language preference',
+            'type': 'opportunity',
+        })
+        lead.preferred_language = 'sw'
+        self.assertEqual(lead.preferred_language, 'sw')
+        self.assertTrue(lead._fields['preferred_language'].tracking)
 
     def test_no_exception_confirmation_and_handover(self):
         self.product.is_storable = True

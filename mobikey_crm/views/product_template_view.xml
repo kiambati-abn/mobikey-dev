@@ -7,7 +7,6 @@
         <field name="arch" type="xml">
             <xpath expr="//field[@name='type']" position="after">
                 <field name="model"/>
-                <field name="target_margin" groups="base.group_system,mobikey_crm.group_mobikey_country_director,mobikey_crm.group_mobikey_country_gm,mobikey_crm.group_mobikey_finance,mobikey_crm.group_mobikey_hq"/>
             </xpath>
             <xpath expr="//field[@name='standard_price']" position="attributes">
                 <attribute name="groups">base.group_system,mobikey_crm.group_mobikey_country_director,mobikey_crm.group_mobikey_country_gm,mobikey_crm.group_mobikey_finance,mobikey_crm.group_mobikey_hq</attribute>

@@ -1,4 +1,5 @@
-from odoo import fields, models
+from odoo import api, fields, models, _
+from odoo.exceptions import ValidationError
 
 
 class Company(models.Model):
@@ -19,10 +20,32 @@ class Company(models.Model):
         [('confirmation', 'Order confirmation'), ('invoicing', 'Fully invoiced'),
          ('payment', 'Fully paid')], string='Commission eligibility')
     mobikey_approval_days = fields.Integer(default=3, string='Approval due in days')
+    mobikey_sm_discount_limit = fields.Float(
+        string='Sales Manager discount limit (%)', default=2.0, required=True,
+        help='Discounts above 0% and up to this percentage require Sales Manager approval.')
+    mobikey_gm_discount_limit = fields.Float(
+        string='Country GM discount limit (%)', default=5.0, required=True,
+        help='Discounts above the Sales Manager limit and up to this percentage require Country GM approval. Higher discounts require HQ approval.')
+    mobikey_minimum_margin = fields.Float(
+        string='Minimum acceptable margin (%)', default=20.0, required=True,
+        help='Quotation lines below this margin require Country GM commercial review.')
     mobikey_sm_ids = fields.Many2many('res.users', 'mobikey_company_sm_rel', string='Assigned Sales Managers')
     mobikey_gm_ids = fields.Many2many('res.users', 'mobikey_company_gm_rel', string='Assigned Country GMs')
     mobikey_hq_ids = fields.Many2many('res.users', 'mobikey_company_hq_rel', string='Assigned HQ approvers')
     mobikey_finance_ids = fields.Many2many('res.users', 'mobikey_company_finance_rel', string='Assigned Finance approvers')
+
+    @api.constrains('mobikey_sm_discount_limit', 'mobikey_gm_discount_limit',
+                    'mobikey_minimum_margin')
+    def _check_commercial_thresholds(self):
+        for company in self:
+            values = (company.mobikey_sm_discount_limit, company.mobikey_gm_discount_limit,
+                      company.mobikey_minimum_margin)
+            if any(value < 0 or value > 100 for value in values):
+                raise ValidationError(_('Discount and margin percentages must be between 0% and 100%.'))
+            if company.mobikey_sm_discount_limit > company.mobikey_gm_discount_limit:
+                raise ValidationError(_(
+                    'The Sales Manager discount limit cannot exceed the Country GM discount limit.'
+                ))
 
     def _mobikey_approvers(self, role):
         self.ensure_one()
