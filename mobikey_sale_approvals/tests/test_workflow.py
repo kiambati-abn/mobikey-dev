@@ -167,6 +167,8 @@ class TestQuotationWorkflow(TransactionCase):
 
     def test_force_demo_loads_with_approval_workflow(self):
         force_demo(self.env)
+        self.assertTrue(self.env.ref('stock.warehouse_company_1').exists())
+        self.assertTrue(self.env.ref('stock.product_cable_management_box').exists())
         self.assertTrue(self.env.ref('sale.sale_order_4').exists())
         self.assertTrue(self.env.ref('sale_management.sale_order_template_1').exists())
         self.assertTrue(self.env.ref(
