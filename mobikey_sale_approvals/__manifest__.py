@@ -1,6 +1,7 @@
 {
     'name': 'Mobikey Sales Approvals',
     'version': '19.0.1.0.0',
+    'author': 'Mobikey',
     'license': 'LGPL-3',
     'depends': ['mobikey_crm', 'sale_margin', 'stock_account'],
     'data': ['security/security.xml', 'security/ir.model.access.csv',

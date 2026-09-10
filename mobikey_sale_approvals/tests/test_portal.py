@@ -1,10 +1,12 @@
 import json
 from odoo import Command
 from odoo.tests import HttpCase, tagged
+from odoo.tools import mute_logger
 
 
 @tagged('post_install', '-at_install')
 class TestApprovalPortal(HttpCase):
+    @mute_logger('odoo.http')
     def test_existing_token_cannot_issue_sign_or_pay_unapproved_offer(self):
         partner = self.env['res.partner'].create({'name': 'Portal approval customer'})
         product = self.env['product.product'].create({'name': 'Portal approval product'})

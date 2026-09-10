@@ -2,6 +2,7 @@ from types import SimpleNamespace
 from unittest.mock import patch
 from odoo.tests import TransactionCase, tagged
 from odoo.exceptions import ValidationError
+from odoo.tools import mute_logger
 
 
 @tagged('post_install', '-at_install')
@@ -18,6 +19,7 @@ class TestMetricCorrectness(TransactionCase):
         values.update(changes)
         return SimpleNamespace(**values)
 
+    @mute_logger('odoo.addons.synconics_bi_dashboard.models.dashboard_chart')
     def test_invalid_domain_does_not_broaden_population(self):
         with self.assertRaises(ValidationError):
             self.env['dashboard.chart'].evaluate_odoo_domain('this is not a domain')
