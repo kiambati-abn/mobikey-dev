@@ -16,7 +16,8 @@ LINE_TERMS = {'product_id', 'product_uom_qty', 'product_uom_id', 'price_unit', '
     'mobikey_observation', 'mobikey_warranty', 'mobikey_product_model', 'mobikey_detail_snapshot',
     'mobikey_show_product_details', 'is_downpayment', 'display_type'}
 CONTROLLED = {'approval_revision', 'approval_submitted', 'approval_fingerprint',
-              'approval_ids', 'handover_created', 'first_issued_at', 'approval_date_order', 'legacy_confirmed_order'}
+              'approval_ids', 'approval_policy_snapshot', 'handover_created', 'first_issued_at',
+              'approval_date_order', 'legacy_confirmed_order'}
 
 
 class SaleOrder(models.Model):
@@ -25,15 +26,33 @@ class SaleOrder(models.Model):
     approval_revision = fields.Integer(default=1, readonly=True, copy=False)
     approval_submitted = fields.Boolean(readonly=True, copy=False)
     approval_fingerprint = fields.Char(readonly=True, copy=False, groups=FINANCIAL)
+    approval_policy_snapshot = fields.Json(
+        readonly=True, copy=False, groups=FINANCIAL,
+        help='Company approval thresholds captured when this quotation revision was submitted.')
     approval_date_order = fields.Datetime(readonly=True, copy=False)
     approval_ids = fields.One2many('mobikey.sale.approval', 'order_id', readonly=True, copy=False)
     approval_count = fields.Integer(compute='_compute_approval_count')
+    approval_progress = fields.Char(compute='_compute_approval_overview', compute_sudo=True)
+    approval_approved_user_ids = fields.Many2many(
+        'res.users', 'mobikey_order_approved_user_rel', compute='_compute_approval_overview',
+        string='Approved by', compute_sudo=True)
+    approval_current_user_ids = fields.Many2many(
+        'res.users', 'mobikey_order_current_user_rel', compute='_compute_approval_overview',
+        string='Awaiting approval from', compute_sudo=True)
+    approval_next_user_ids = fields.Many2many(
+        'res.users', 'mobikey_order_next_user_rel', compute='_compute_approval_overview',
+        string='Up next', compute_sudo=True)
+    my_actionable_approval_count = fields.Integer(compute='_compute_my_actionable_approval_count')
     approval_status = fields.Selection([('draft', 'Prepare offer'), ('ready', 'Ready to issue'),
         ('pending', 'Approval pending'), ('rejected', 'Changes requested')],
         compute='_compute_approval_status', compute_sudo=True)
     trade_in = fields.Boolean(string='Trade-in included')
     trade_in_valuation = fields.Monetary()
     bank_id = fields.Many2one('res.bank', string='Financing bank')
+    financing_approval_required = fields.Boolean(
+        compute='_compute_financing_approval_required', compute_sudo=True,
+        string='Financing approval required',
+        help='Triggered when the selected payment term is configured as Financing Required.')
     insurance_required = fields.Boolean()
     after_sales_user_id = fields.Many2one('res.users', check_company=True,
         domain="[('share', '=', False), ('company_ids', 'in', company_id)]")
@@ -47,12 +66,79 @@ class SaleOrder(models.Model):
         for order in self:
             order.approval_count = len(order.approval_ids)
 
+    @api.depends('approval_ids.status', 'approval_ids.notified_at', 'approval_ids.decided_by',
+                 'approval_ids.assigned_user_ids', 'approval_revision')
+    def _compute_approval_overview(self):
+        for order in self:
+            approvals = order._current_approvals()
+            approved = approvals.filtered(lambda approval: approval.status == 'approved')
+            active = approvals.filtered(
+                lambda approval: approval.status == 'pending' and approval.notified_at
+            )
+            waiting = approvals.filtered(
+                lambda approval: approval.status == 'pending' and not approval.notified_at
+            )
+            order.approval_progress = _(
+                '%(approved)s of %(total)s approved',
+                approved=len(approved), total=len(approvals),
+            ) if approvals else False
+            order.approval_approved_user_ids = approved.mapped('decided_by')
+            order.approval_current_user_ids = active.mapped('assigned_user_ids')
+            order.approval_next_user_ids = waiting.mapped('assigned_user_ids')
+
+    def _my_actionable_approvals(self):
+        self.ensure_one()
+        user = self.env.user
+        return self._current_approvals().filtered(
+            lambda approval: approval.status == 'pending' and approval.notified_at
+            and user in approval.assigned_user_ids
+            and user in approval.company_id._mobikey_approvers(approval.authority)
+        )
+
+    @api.depends_context('uid')
+    @api.depends('approval_ids.status', 'approval_ids.notified_at',
+                 'approval_ids.assigned_user_ids', 'approval_revision')
+    def _compute_my_actionable_approval_count(self):
+        for order in self:
+            order.my_actionable_approval_count = len(order._my_actionable_approvals())
+
+    @api.depends('payment_term_id.financing_required', 'approval_submitted',
+                 'approval_policy_snapshot')
+    def _compute_financing_approval_required(self):
+        for order in self:
+            policy = order._approval_policy()
+            order.financing_approval_required = bool(policy.get('financing_required'))
+
     def action_view_mobikey_approvals(self):
         self.ensure_one()
         action = self.env['ir.actions.actions']._for_xml_id('mobikey_sale_approvals.approval_action')
         action['domain'] = [('order_id', '=', self.id)]
         action['context'] = {'default_order_id': self.id}
         return action
+
+    def action_review_my_approvals(self):
+        self.ensure_one()
+        approvals = self._my_actionable_approvals()
+        if not approvals:
+            raise UserError(_('You do not have an active approval on this quotation.'))
+        action = self.env['ir.actions.actions']._for_xml_id('mobikey_sale_approvals.approval_action')
+        action['domain'] = [('id', 'in', approvals.ids)]
+        action['context'] = {}
+        return action
+
+    def action_approve_current(self):
+        self.ensure_one()
+        approvals = self._my_actionable_approvals()
+        if len(approvals) != 1:
+            return self.action_review_my_approvals()
+        return approvals.action_approve()
+
+    def action_request_changes_current(self):
+        self.ensure_one()
+        approvals = self._my_actionable_approvals()
+        if len(approvals) != 1:
+            return self.action_review_my_approvals()
+        return approvals.action_request_changes()
 
     def action_import_legacy_products(self):
         self._lock_approval()
@@ -104,23 +190,51 @@ class SaleOrder(models.Model):
     def _commercial_fingerprint(self):
         return hashlib.sha256(json.dumps(self._commercial_payload(), sort_keys=True).encode()).hexdigest()
 
-    def _approval_requirements(self):
+    def _company_approval_policy(self):
+        self.ensure_one()
+        company = self.company_id
+        return {
+            'version': 'company_v1',
+            'discount_sm_limit': company.mobikey_sm_discount_limit,
+            'discount_gm_limit': company.mobikey_gm_discount_limit,
+            'minimum_margin': company.mobikey_minimum_margin,
+            'financing_required': bool(self.payment_term_id.financing_required),
+        }
+
+    def _approval_policy(self):
+        self.ensure_one()
+        order = self.sudo()
+        if order.approval_submitted and order.approval_policy_snapshot:
+            return order.approval_policy_snapshot
+        return order._company_approval_policy()
+
+    def _approval_requirements(self, policy=None):
         """Return safe category/authority pairs; financial inputs never leave this method."""
         self.ensure_one()
         order = self.sudo().with_company(self.company_id)
+        policy = policy or order._approval_policy()
         lines = order.order_line.filtered(lambda l: not l.display_type and not l.is_downpayment)
         requirements = {}
         discount = max(lines.mapped('discount'), default=0)
         if discount > 0:
-            requirements['discount'] = 'sm' if discount <= 2 else 'gm' if discount <= 5 else 'hq'
+            requirements['discount'] = (
+                'sm' if discount <= policy['discount_sm_limit']
+                else 'gm' if discount <= policy['discount_gm_limit']
+                else 'hq'
+            )
         for line in lines:
             cost = line.purchase_price * line.product_uom_qty + line.reconditioning_cost
             revenue = line.price_subtotal
             profit = revenue - cost
             margin = 100 * profit / revenue if revenue else 0
-            if profit < 0 or margin < line.target_margin_snapshot:
+            margin_limit = (
+                line.target_margin_snapshot
+                if policy.get('version') == 'legacy_product_v1'
+                else policy['minimum_margin']
+            )
+            if profit < 0 or margin < margin_limit:
                 requirements['margin'] = 'gm'
-        if order.payment_term_id.financing_required:
+        if policy.get('financing_required'):
             requirements['financing'] = 'finance'
         if order.trade_in:
             if order.trade_in_valuation <= 0:
@@ -142,8 +256,12 @@ class SaleOrder(models.Model):
         return self.sudo().approval_ids.filtered(lambda a: a.revision == self.approval_revision
                     and a.category != 'commission' and a.status != 'withdrawn')
 
-    @api.depends('approval_submitted', 'approval_revision', 'approval_ids.status',
-                 'order_line.discount', 'order_line.price_subtotal', 'payment_term_id', 'trade_in')
+    @api.depends('approval_submitted', 'approval_policy_snapshot', 'approval_revision',
+                 'approval_ids.status', 'order_line.discount', 'order_line.price_subtotal',
+                 'order_line.purchase_price', 'order_line.reconditioning_cost',
+                 'payment_term_id.financing_required', 'trade_in',
+                 'company_id.mobikey_sm_discount_limit', 'company_id.mobikey_gm_discount_limit',
+                 'company_id.mobikey_minimum_margin')
     def _compute_approval_status(self):
         for order in self:
             approvals = order._current_approvals()
@@ -166,20 +284,25 @@ class SaleOrder(models.Model):
                 raise UserError(_('Only quotations can be submitted.'))
             if order.approval_submitted:
                 continue
-            requirements = order._approval_requirements()
+            policy = order._company_approval_policy()
+            requirements = order._approval_requirements(policy=policy)
             assignments = {category: order.company_id._mobikey_approvers(role)
                            for category, role in requirements.items()}
             missing = [category for category, users in assignments.items() if not users]
             if missing:
                 raise UserError(_('Configure eligible company approvers for: %s', ', '.join(missing)))
             super(SaleOrder, order.sudo()).write({'approval_submitted': True,
+                'approval_policy_snapshot': policy,
                 'approval_date_order': order.date_order,
                 'approval_fingerprint': order._commercial_fingerprint()})
             for category, role in requirements.items():
                 self.env['mobikey.sale.approval'].sudo().create({
                     'order_id': order.id, 'revision': order.approval_revision, 'category': category,
                     'authority': role, 'assigned_user_ids': [(6, 0, assignments[category].ids)],
-                    'financial_snapshot': order._commercial_payload(),
+                    'financial_snapshot': {
+                        **order._commercial_payload(),
+                        'approval_policy': policy,
+                    },
                     'requested_by': self.env.uid,
                     'deadline': fields.Date.today() + timedelta(days=max(1, order.company_id.mobikey_approval_days)),
                 })
@@ -204,7 +327,8 @@ class SaleOrder(models.Model):
             previous_revision = order.approval_revision
             order._withdraw_approvals()
             super(SaleOrder, order.sudo()).write({'approval_revision': order.approval_revision + 1,
-                'approval_submitted': False, 'approval_fingerprint': False, 'state': 'draft'})
+                'approval_submitted': False, 'approval_fingerprint': False,
+                'approval_policy_snapshot': False, 'state': 'draft'})
             order.sudo().message_post(
                 author_id=self.env.user.partner_id.id,
                 body=Markup(
@@ -218,8 +342,14 @@ class SaleOrder(models.Model):
     def _withdraw_approvals(self):
         for approval in self.sudo().approval_ids.filtered(lambda a: a.status in ('pending', 'approved', 'rejected')):
             # Historical decisions retain their decision-maker and timestamp.
-            approval.write({'status': 'withdrawn'})
+            approval.with_context(tracking_disable=True).write({'status': 'withdrawn'})
             approval._close_activities()
+            approval._post_approval_update(
+                Markup(
+                    '<p>%s approval for quotation <strong>%s</strong>, revision %s, was withdrawn.</p>'
+                ) % (approval._category_label(), approval.order_id.name, approval.revision),
+                author=self.env.user,
+            )
 
     def _check_commercial_approval(self, issue=False):
         for order in self:
