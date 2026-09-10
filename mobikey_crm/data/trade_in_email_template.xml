@@ -15,7 +15,7 @@
                     <p>The CRM Opportunity <b><t t-out="object.name or ''"/></b> requires <strong>Trade In approval</strong>.</p>
                         <p>
                             Click here to review:
-                            <a t-att-href="object.get_record_url()">
+                            <a t-att-href="object.get_base_url() + '/odoo/crm.lead/%s' % object.id">
                                 View Opportunity
                             </a>
                         </p>
