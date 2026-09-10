@@ -2,6 +2,7 @@ from odoo import Command
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.modules.loading import force_demo
 from odoo.tests import TransactionCase, tagged, new_test_user
+from odoo.tools import mute_logger
 
 
 @tagged('post_install', '-at_install')
@@ -265,6 +266,7 @@ class TestQuotationWorkflow(TransactionCase):
         lead.expected_revenue = 1000
         self.assertEqual(snapshot.expected_revenue, 500)
 
+    @mute_logger('odoo.addons.mobikey_sale_approvals.hooks')
     def test_cutover_preserves_history_and_does_not_duplicate_lines(self):
         from ..hooks import post_init_hook
         lead = self.env['crm.lead'].create({'name': 'Historical opportunity', 'type': 'opportunity',
