@@ -76,7 +76,11 @@ class TestQuotationWorkflow(TransactionCase):
         approval.with_user(self.hq).action_approve()
         with self.assertRaises(UserError):
             order.order_line.discount = 15
+        messages_before_revision = order.message_ids
         order.action_revise_quotation()
+        revision_messages = order.message_ids - messages_before_revision
+        self.assertTrue(any('revision 1 was withdrawn' in message.body for message in revision_messages))
+        self.assertTrue(any('Revision 2' in message.body for message in revision_messages))
         order.order_line.discount = 15
         self.assertEqual(approval.financial_snapshot, snapshot)
         with self.assertRaises(UserError):
@@ -108,18 +112,40 @@ class TestQuotationWorkflow(TransactionCase):
 
     def test_notifications_exclude_customer_and_are_deduplicated(self):
         order = self.quote((10,))
-        before = self.env['mail.mail'].sudo().search([])
+        before = order.message_ids
         order.action_submit_approvals()
-        first = self.env['mail.mail'].sudo().search([]) - before
+        first = order.message_ids - before
         order.action_submit_approvals()
-        after = self.env['mail.mail'].sudo().search([]) - before
+        after = order.message_ids - before
         self.assertEqual(first, after)
-        requests = after.filtered(lambda mail: mail.subject == 'Quotation approval request')
+        requests = after.filtered(lambda message: 'requires Discount approval' in message.body)
         self.assertEqual(len(requests), 1)
-        self.assertEqual(requests.recipient_ids, self.hq.partner_id)
-        self.assertFalse(requests.email_to)
-        self.assertFalse(requests.email_cc)
-        self.assertNotIn(self.partner, after.recipient_ids)
+        self.assertEqual(requests.partner_ids, self.hq.partner_id)
+        self.assertNotIn(self.partner, after.partner_ids)
+
+        approval = order.sudo().approval_ids
+        before_decision = order.message_ids
+        approval.with_user(self.hq).action_approve()
+        outcome = (order.message_ids - before_decision).filtered(
+            lambda message: 'Discount approval was approved' in message.body
+        )
+        self.assertEqual(len(outcome), 1)
+        self.assertIn(self.sales.partner_id, outcome.partner_ids)
+        self.assertNotIn(self.partner, outcome.partner_ids)
+
+    def test_change_request_is_logged_and_sent_to_submitter(self):
+        order = self.quote((10,))
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids.with_user(self.hq)
+        approval.change_request = 'Please confirm the customer-facing trade terms.'
+        before = order.message_ids
+        approval.action_request_changes()
+        outcome = (order.message_ids - before).filtered(
+            lambda message: 'Changes were requested for Discount approval' in message.body
+        )
+        self.assertEqual(len(outcome), 1)
+        self.assertIn('Please confirm the customer-facing trade terms.', outcome.body)
+        self.assertIn(self.sales.partner_id, outcome.partner_ids)
 
     def test_trade_in_financing_and_missing_assignment(self):
         term = self.env['account.payment.term'].create({'name': 'Finance term', 'financing_required': True})

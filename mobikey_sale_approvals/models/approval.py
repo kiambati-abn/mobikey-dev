@@ -22,7 +22,8 @@ class SaleApproval(models.Model):
         help='Immutable commercial and cost inputs captured when this revision was submitted.')
     assigned_user_ids = fields.Many2many('res.users', string='Assigned approvers', readonly=True)
     status = fields.Selection([('pending', 'Pending'), ('approved', 'Approved'),
-        ('rejected', 'Changes requested'), ('withdrawn', 'Withdrawn')], default='pending', required=True)
+        ('rejected', 'Changes requested'), ('withdrawn', 'Withdrawn')], default='pending',
+        required=True, tracking=True)
     requested_by = fields.Many2one('res.users', required=True)
     requested_at = fields.Datetime(default=fields.Datetime.now, required=True)
     notified_at = fields.Datetime()
@@ -31,7 +32,8 @@ class SaleApproval(models.Model):
     decided_at = fields.Datetime()
     deadline = fields.Date()
     turnaround_hours = fields.Float(compute='_compute_turnaround', store=True)
-    change_request = fields.Text(help='Customer-safe explanation; never include costs or margins.')
+    change_request = fields.Text(string='Reason for requested changes',
+        help='Customer-safe explanation; never include costs or margins.')
 
     _revision_category_unique = models.Constraint('UNIQUE(order_id, revision, category)',
         'Only one decision per quotation revision and category is allowed.')
@@ -95,26 +97,47 @@ class SaleApproval(models.Model):
             approval.sudo().write({'status': decision, 'decided_by': self.env.uid,
                                    'decided_at': fields.Datetime.now()})
             approval._close_activities()
+            approval._notify_outcome(decision)
             approval.order_id._activate_approvals()
-            if decision == 'rejected':
-                approval._notify_outcome(_('Changes requested. Open the quotation to review the request.'))
-            elif approval.category == 'commission':
-                approval._notify_outcome(_('Commission approval has been recorded.'))
-            elif all(a.status == 'approved' for a in approval.order_id._current_approvals()):
-                approval._notify_outcome(_('The quotation is approved and ready for customer issue.'))
         return True
 
-    def _queue_notification(self, users, subject, body):
-        """Explicit internal recipients only; no template defaults or followers."""
+    def _notification_users(self, users):
+        """Keep workflow notifications inside the active company user population."""
         self.ensure_one()
-        users = users.filtered(lambda u: u.active and not u.share and self.company_id in u.company_ids)
-        for user in users:
-            self.env['mail.mail'].sudo().create({
-                'subject': subject, 'body_html': body,
-                'email_from': self.company_id.partner_id.email_formatted or self.env.user.email_formatted,
-                'email_to': False, 'email_cc': False,
-                'recipient_ids': [(6, 0, [user.partner_id.id])], 'auto_delete': False,
-            })
+        return users.filtered(lambda u: u.active and not u.share and self.company_id in u.company_ids)
+
+    def _category_label(self):
+        self.ensure_one()
+        return dict(self._fields['category'].selection).get(self.category, self.category)
+
+    def _post_order_update(self, body, users=None, author=None):
+        """Log on the quotation and notify only named internal users.
+
+        Odoo chooses Inbox or email from each recipient's notification preference.
+        """
+        self.ensure_one()
+        users = self._notification_users(users or self.env['res.users'])
+        author = author or self.env.user
+        return self.order_id.sudo().message_post(
+            author_id=author.partner_id.id,
+            body=body,
+            partner_ids=users.partner_id.ids,
+            subtype_xmlid='mail.mt_note',
+            notify_skip_followers=True,
+        )
+
+    def _notify_users(self, users, subject, body):
+        """Send a preference-aware notification without logging routine reminders."""
+        self.ensure_one()
+        users = self._notification_users(users)
+        if users:
+            self.sudo().message_notify(
+                subject=subject,
+                body=body,
+                partner_ids=users.partner_id.ids,
+                notify_skip_followers=True,
+                model_description=_('Quotation approval'),
+            )
 
     def _notify_request(self):
         self.ensure_one()
@@ -125,16 +148,37 @@ class SaleApproval(models.Model):
                 summary=_('Review quotation %s', self.order_id.name), date_deadline=self.deadline,
                 note=_('Review the assigned decision in Sales approvals.'))
         url = self.get_base_url() + '/odoo/mobikey.sale.approval/' + str(self.id)
-        body = Markup('<p>Quotation %s requires your review.</p><p><a href="%s">Open approval</a></p>') % (self.order_id.name, url)
-        self._queue_notification(self.assigned_user_ids, _('Quotation approval request'), body)
+        body = Markup(
+            '<p>Quotation <strong>%s</strong>, revision %s, requires %s approval.</p>'
+            '<p><a href="%s">Open approval</a></p>'
+        ) % (self.order_id.name, self.revision, self._category_label(), url)
+        self._post_order_update(body, self.assigned_user_ids, author=self.requested_by)
         self.sudo().write({'notified_at': fields.Datetime.now()})
 
-    def _notify_outcome(self, text):
-        self._queue_notification(self.requested_by | self.order_id.user_id,
-            _('Quotation %s: approval update', self.order_id.name), Markup('<p>%s</p>') % text)
+    def _notify_outcome(self, decision):
+        self.ensure_one()
+        label = self._category_label()
+        if decision == 'rejected':
+            body = Markup(
+                '<p>Changes were requested for %s approval on quotation <strong>%s</strong>, revision %s.</p>'
+                '<p><strong>Reason:</strong> %s</p>'
+            ) % (label, self.order_id.name, self.revision, self.change_request)
+        else:
+            ready = self.category != 'commission' and all(
+                approval.status == 'approved' for approval in self.order_id._current_approvals()
+            )
+            body = Markup(
+                '<p>%s approval was approved for quotation <strong>%s</strong>, revision %s.</p>%s'
+            ) % (
+                label,
+                self.order_id.name,
+                self.revision,
+                Markup('<p>The quotation is ready for customer issue.</p>') if ready else Markup(),
+            )
+        self._post_order_update(body, self.requested_by | self.order_id.user_id)
 
     def _close_activities(self):
-        # No financial feedback copied to quotation chatter.
+        # Decision details are logged separately using customer-safe wording.
         self.sudo().activity_ids.unlink()
 
     @api.model
@@ -148,6 +192,6 @@ class SaleApproval(models.Model):
             if approval.status != 'pending' or approval.last_reminded_on == today:
                 continue
             users = approval.assigned_user_ids & approval.company_id._mobikey_approvers(approval.authority)
-            approval._queue_notification(users, _('Overdue quotation approval'),
+            approval._notify_users(users, _('Overdue quotation approval'),
                 Markup('<p>Quotation %s is awaiting your review in Sales approvals.</p>') % approval.order_id.name)
             approval.sudo().write({'last_reminded_on': today})
