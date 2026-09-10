@@ -2,6 +2,7 @@ from datetime import timedelta
 import hashlib
 import json
 
+from markupsafe import Markup
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError, ValidationError
 from .security import FINANCIAL
@@ -26,6 +27,7 @@ class SaleOrder(models.Model):
     approval_fingerprint = fields.Char(readonly=True, copy=False, groups=FINANCIAL)
     approval_date_order = fields.Datetime(readonly=True, copy=False)
     approval_ids = fields.One2many('mobikey.sale.approval', 'order_id', readonly=True, copy=False)
+    approval_count = fields.Integer(compute='_compute_approval_count')
     approval_status = fields.Selection([('draft', 'Prepare offer'), ('ready', 'Ready to issue'),
         ('pending', 'Approval pending'), ('rejected', 'Changes requested')],
         compute='_compute_approval_status', compute_sudo=True)
@@ -39,6 +41,18 @@ class SaleOrder(models.Model):
     first_issued_at = fields.Datetime(copy=False, readonly=True)
     legacy_confirmed_order = fields.Boolean(copy=False, readonly=True,
         help='Order was already confirmed at cutover. Historical commitment; no new approval is inferred.')
+
+    @api.depends('approval_ids')
+    def _compute_approval_count(self):
+        for order in self:
+            order.approval_count = len(order.approval_ids)
+
+    def action_view_mobikey_approvals(self):
+        self.ensure_one()
+        action = self.env['ir.actions.actions']._for_xml_id('mobikey_sale_approvals.approval_action')
+        action['domain'] = [('order_id', '=', self.id)]
+        action['context'] = {'default_order_id': self.id}
+        return action
 
     def action_import_legacy_products(self):
         self._lock_approval()
@@ -187,9 +201,18 @@ class SaleOrder(models.Model):
                 raise UserError(_('Confirmed orders cannot be revised through quotation approvals.'))
             if order.sudo().transaction_ids.filtered(lambda tx: tx.state in ('pending', 'authorized', 'done')):
                 raise UserError(_('Resolve the quotation payment transaction before revising the offer.'))
+            previous_revision = order.approval_revision
             order._withdraw_approvals()
             super(SaleOrder, order.sudo()).write({'approval_revision': order.approval_revision + 1,
                 'approval_submitted': False, 'approval_fingerprint': False, 'state': 'draft'})
+            order.sudo().message_post(
+                author_id=self.env.user.partner_id.id,
+                body=Markup(
+                    '<p>Quotation approval revision %s was withdrawn. Revision %s is ready for review and resubmission.</p>'
+                ) % (previous_revision, order.approval_revision),
+                subtype_xmlid='mail.mt_note',
+                notify_skip_followers=True,
+            )
         return True
 
     def _withdraw_approvals(self):

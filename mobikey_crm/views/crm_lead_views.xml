@@ -38,12 +38,13 @@
               <field name="disqualification_notes" invisible="lead_status != 'disqualified'" />
             </group>
           </group>
-          <group string="Attribution">
-            <field name="sub_source" />
-            <field name="referral_name" />
-            <field name="walkin_location" />
-          </group>
         </page>
+      </xpath>
+      <xpath expr="//page[@name='extra']//group[@name='categorization']/field[@name='referred']" position="after">
+        <field name="walkin_location" />
+      </xpath>
+      <xpath expr="//page[@name='lead']//field[@name='referred']" position="after">
+        <field name="walkin_location" />
       </xpath>
     </field>
   </record>
