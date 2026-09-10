@@ -215,11 +215,17 @@ class SaleOrder(models.Model):
                     or any(a.status != 'approved' or a.authority != requirements[a.category] for a in approvals)):
                 raise UserError(_('Complete quotation approvals for the current revision before proceeding.'))
 
+    @api.model
+    def _is_trusted_demo_load(self):
+        return self.env.su and self.env.context.get('install_demo')
+
     def action_quotation_send(self):
         self._check_commercial_approval(issue=True)
         return super().action_quotation_send()
 
     def action_confirm(self):
+        if self._is_trusted_demo_load():
+            return super().action_confirm()
         self._lock_approval()
         self._check_commercial_approval()
         result = super().action_confirm()
@@ -279,8 +285,9 @@ class SaleOrder(models.Model):
 
     @api.model_create_multi
     def create(self, vals_list):
-        loading_demo = self.env.su and self.env.context.get('install_demo')
-        if not loading_demo and any(vals.get('state', 'draft') != 'draft' for vals in vals_list):
+        if not self._is_trusted_demo_load() and any(
+            vals.get('state', 'draft') != 'draft' for vals in vals_list
+        ):
             raise UserError(_('Create a draft quotation, then use the normal send or confirmation action.'))
         if any(CONTROLLED.intersection(vals) for vals in vals_list) and not self.env.su:
             raise AccessError(_('Approval control fields are managed by workflow actions.'))
@@ -293,6 +300,8 @@ class SaleOrder(models.Model):
         return orders
 
     def write(self, vals):
+        if self._is_trusted_demo_load():
+            return super().write(vals)
         if CONTROLLED.intersection(vals) and not self.env.su:
             raise AccessError(_('Approval control fields are managed by workflow actions.'))
         confirming = vals.get('state') == 'sale' and not (set(vals) - {'state', 'date_order'})
