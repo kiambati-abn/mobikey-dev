@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_mobikey_document_brand_list" model="ir.ui.view">
+        <field name="name">mobikey.document.brand.list</field>
+        <field name="model">mobikey.document.brand</field>
+        <field name="arch" type="xml">
+            <list string="Manufacturer Brands" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="logo" widget="image" options="{'size': [0, 40]}"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_mobikey_document_brand_form" model="ir.ui.view">
+        <field name="name">mobikey.document.brand.form</field>
+        <field name="model">mobikey.document.brand</field>
+        <field name="arch" type="xml">
+            <form string="Manufacturer Brand">
+                <sheet>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <field name="logo" widget="image" class="oe_avatar"/>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="e.g. MAN"/></h1>
+                    </div>
+                    <group>
+                        <field name="sequence"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mobikey_document_brand" model="ir.actions.act_window">
+        <field name="name">Manufacturer Brands</field>
+        <field name="res_model">mobikey.document.brand</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Create a manufacturer brand</p>
+            <p>Upload the logo once, then assign the brand to products or document templates.</p>
+        </field>
+    </record>
+
+    <record id="view_mobikey_document_template_list" model="ir.ui.view">
+        <field name="name">mobikey.document.template.list</field>
+        <field name="model">mobikey.document.template</field>
+        <field name="arch" type="xml">
+            <list string="Quotation and Proforma Templates" multi_edit="1">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="company_id" groups="base.group_multi_company"/>
+                <field name="brand_source"/>
+                <field name="brand_ids" widget="many2many_tags" optional="show"/>
+                <field name="watermark_enabled" optional="show"/>
+                <field name="active" widget="boolean_toggle"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="view_mobikey_document_template_form" model="ir.ui.view">
+        <field name="name">mobikey.document.template.form</field>
+        <field name="model">mobikey.document.template</field>
+        <field name="arch" type="xml">
+            <form string="Quotation and Proforma Template">
+                <sheet>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <div class="oe_title">
+                        <label for="name"/>
+                        <h1><field name="name" placeholder="e.g. MAN Proforma"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                            <field name="company_partner_id" invisible="1"/>
+                            <field name="sequence"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="Branding">
+                            <field name="brand_source"/>
+                            <field name="brand_ids"
+                                   widget="many2many_tags"
+                                   invisible="brand_source != 'template'"
+                                   required="brand_source == 'template'"/>
+                            <field name="issuer_logo" widget="image" class="oe_avatar"/>
+                            <field name="issuer_logo_size"
+                                   widget="radio"
+                                   options="{'horizontal': true}"/>
+                            <field name="manufacturer_logo_size"
+                                   widget="radio"
+                                   options="{'horizontal': true}"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Appearance" name="appearance">
+                            <group>
+                                <group string="Color Scheme">
+                                    <field name="color_scheme"/>
+                                    <button name="action_restore_color_scheme_defaults"
+                                            type="object"
+                                            string="Restore Scheme Defaults"
+                                            icon="fa-undo"
+                                            class="btn-secondary"
+                                            invisible="color_scheme == 'custom'"/>
+                                    <field name="primary_color" widget="color"/>
+                                    <field name="accent_color" widget="color"/>
+                                </group>
+                                <group string="Optional Color Overrides">
+                                    <field name="body_text_color" widget="color"/>
+                                    <field name="muted_text_color" widget="color"/>
+                                    <field name="light_background_color" widget="color"/>
+                                </group>
+                            </group>
+                            <group>
+                                <group string="Document Status">
+                                    <field name="watermark_enabled"/>
+                                    <field name="watermark_text"
+                                           invisible="not watermark_enabled"
+                                           required="watermark_enabled"
+                                           placeholder="e.g. Original"/>
+                                </group>
+                            </group>
+                            <group string="Palette Preview">
+                                <field name="palette_preview"
+                                       widget="html"
+                                       readonly="1"
+                                       nolabel="1"
+                                       colspan="2"/>
+                            </group>
+                            <group>
+                                <group string="Footer Note">
+                                    <field name="footer_note" widget="html"/>
+                                </group>
+                            </group>
+                        </page>
+                        <page string="Payment Banks" name="banks_terms">
+                            <group>
+                                <field name="bank_account_ids"
+                                       widget="many2many_tags"
+                                       domain="[('partner_id', '=', company_partner_id)]"
+                                       context="{'default_partner_id': company_partner_id}"/>
+                            </group>
+                        </page>
+                        <page string="Signatories" name="signatories">
+                            <group>
+                                <group string="First Signatory">
+                                    <field name="signatory_1_id"/>
+                                    <field name="signatory_1_title"/>
+                                    <field name="signatory_1_image" widget="image"/>
+                                </group>
+                                <group string="Second Signatory">
+                                    <field name="signatory_2_id"/>
+                                    <field name="signatory_2_title"/>
+                                    <field name="signatory_2_image" widget="image"/>
+                                </group>
+                            </group>
+                            <group>
+                                <field name="show_customer_signature"/>
+                            </group>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mobikey_document_template" model="ir.actions.act_window">
+        <field name="name">Proforma Templates</field>
+        <field name="res_model">mobikey.document.template</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Create a branded proforma template</p>
+            <p>Configure logos, colors, bank accounts, terms, and signatories without changing report code.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_mobikey_document_template"
+              name="Proforma Templates"
+              parent="sale.menu_sales_config"
+              action="action_mobikey_document_template"
+              groups="sales_team.group_sale_manager"
+              sequence="40"/>
+
+    <menuitem id="menu_mobikey_document_brand"
+              name="Manufacturer Brands"
+              parent="sale.prod_config_main"
+              action="action_mobikey_document_brand"
+              groups="sales_team.group_sale_manager"
+              sequence="40"/>
+</odoo>

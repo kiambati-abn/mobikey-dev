@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="view_sale_order_form_mobikey_documents" model="ir.ui.view">
+        <field name="name">sale.order.form.mobikey.documents</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='payment_term_id']" position="after">
+                <field name="mobikey_document_template_id"
+                       options="{'no_create': True}"
+                       readonly="state in ['cancel', 'sale']"/>
+            </xpath>
+
+            <xpath expr="//page[@name='order_lines']" position="after">
+                <page string="Proforma Details" name="mobikey_proforma_details">
+                    <button name="action_mobikey_refresh_document_details"
+                            type="object"
+                            string="Refresh Product Document Details"
+                            class="btn-secondary"
+                            icon="fa-refresh"
+                            invisible="state != 'draft'"
+                            confirm="This replaces the draft line model, OBS, warranty, attributes, and specifications with the current product values. Continue?"/>
+                    <group>
+                        <group string="Commercial Document">
+                            <field name="mobikey_delivery_terms" readonly="locked"/>
+                            <field name="commitment_date" readonly="locked"/>
+                            <field name="validity_date" readonly="state in ['cancel', 'sale']"/>
+                            <field name="mobikey_discount_total" readonly="1"/>
+                            <field name="mobikey_watermark_enabled" readonly="locked"/>
+                            <field name="mobikey_watermark_text"
+                                   readonly="locked"
+                                   invisible="not mobikey_watermark_enabled"
+                                   required="mobikey_watermark_enabled"
+                                   placeholder="e.g. Original"/>
+                        </group>
+                        <group string="Branding and Payment">
+                            <field name="mobikey_company_partner_id" invisible="1"/>
+                            <field name="mobikey_brand_ids" widget="many2many_tags" readonly="locked"/>
+                            <field name="mobikey_bank_account_ids"
+                                   widget="many2many_tags"
+                                   domain="[('partner_id', '=', mobikey_company_partner_id)]"
+                                   readonly="locked"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+
+            <xpath expr="//field[@name='order_line']/form//field[@name='name']" position="after">
+                <separator string="Quotation and Proforma Details" colspan="2"/>
+                <field name="mobikey_show_product_details" readonly="parent.locked"/>
+                <field name="mobikey_product_model"
+                       readonly="parent.locked"/>
+                <field name="mobikey_observation"
+                       readonly="parent.locked"
+                       invisible="not mobikey_show_product_details"
+                       placeholder="OBS copied from the product Sales Description."/>
+                <field name="mobikey_warranty"
+                       readonly="parent.locked"
+                       placeholder="Warranty terms for this specific product line."/>
+                <field name="mobikey_detail_snapshot" invisible="1"/>
+            </xpath>
+
+            <xpath expr="//field[@name='order_line']/list/field[@name='product_uom_qty']" position="after">
+                <field name="mobikey_show_product_details" optional="hide"/>
+                <field name="mobikey_product_model" optional="hide"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

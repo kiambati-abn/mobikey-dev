@@ -1,0 +1,5 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+approval_sales,Sales approval summary,model_mobikey_sale_approval,sales_team.group_sale_salesman,1,1,0,0
+approval_approver,Approval assignee,model_mobikey_sale_approval,group_approver,1,1,0,0
+snapshot_sales,Forecast snapshot,model_mobikey_forecast_snapshot,sales_team.group_sale_salesman,1,0,0,0
+approval_request_changes,Approval request changes wizard,model_mobikey_sale_approval_request_changes,group_approver,1,1,1,1

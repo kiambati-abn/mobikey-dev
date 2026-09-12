@@ -1,0 +1,463 @@
+from odoo import Command
+from odoo.exceptions import AccessError, UserError, ValidationError
+from odoo.modules.loading import force_demo
+from odoo.tests import TransactionCase, tagged, new_test_user
+from odoo.tools import mute_logger
+
+
+@tagged('post_install', '-at_install')
+class TestQuotationWorkflow(TransactionCase):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
+        cls.sales = new_test_user(cls.env, login='workflow.sales', groups='sales_team.group_sale_salesman')
+        cls.sm = new_test_user(cls.env, login='workflow.sm', groups='mobikey_crm.group_mobikey_sales_manager')
+        cls.gm = new_test_user(cls.env, login='workflow.gm', groups='mobikey_crm.group_mobikey_country_gm')
+        cls.hq = new_test_user(cls.env, login='workflow.hq', groups='mobikey_crm.group_mobikey_hq')
+        cls.finance = new_test_user(cls.env, login='workflow.finance', groups='mobikey_crm.group_mobikey_finance')
+        cls.env.company.write({'mobikey_sm_ids': [Command.set(cls.sm.ids)],
+            'mobikey_gm_ids': [Command.set(cls.gm.ids)], 'mobikey_hq_ids': [Command.set(cls.hq.ids)],
+            'mobikey_finance_ids': [Command.set(cls.finance.ids)], 'mobikey_trade_in_configured': True,
+            'mobikey_trade_in_threshold': 1000,
+            'mobikey_trade_in_approver_ids': [Command.set((cls.gm | cls.finance).ids)]})
+        cls.partner = cls.env['res.partner'].create({'name': 'Customer', 'email': 'customer@example.invalid'})
+        cls.product = cls.env['product.product'].create({'name': 'Vehicle', 'list_price': 1000,
+            'standard_price': 600, 'target_margin': 20, 'taxes_id': [Command.clear()]})
+
+    def quote(self, discounts=(0,), **values):
+        return self.env['sale.order'].with_user(self.sales).create({
+            'partner_id': self.partner.id, 'user_id': self.sales.id,
+            'order_line': [Command.create({'product_id': self.product.id, 'product_uom_qty': 1,
+                'price_unit': 1000, 'discount': discount, 'tax_ids': [Command.clear()]}) for discount in discounts],
+            **values})
+
+    def test_discount_boundaries_and_mixed_lines(self):
+        for discount, role in [(0, None), (2, 'sm'), (2.01, 'gm'), (5, 'gm'), (5.01, 'hq')]:
+            order = self.quote((discount,))
+            self.assertEqual(order._approval_requirements().get('discount'), role)
+        self.assertEqual(self.quote((1, 10))._approval_requirements()['discount'], 'hq')
+
+        self.env.company.write({
+            'mobikey_sm_discount_limit': 3,
+            'mobikey_gm_discount_limit': 7,
+        })
+        self.assertEqual(self.quote((3,))._approval_requirements()['discount'], 'sm')
+        self.assertEqual(self.quote((3.01,))._approval_requirements()['discount'], 'gm')
+        self.assertEqual(self.quote((7.01,))._approval_requirements()['discount'], 'hq')
+
+    def test_company_threshold_validation_and_margin(self):
+        self.product.target_margin = 60
+        order = self.quote()
+        self.assertNotIn('margin', order._approval_requirements())
+        self.env.company.mobikey_minimum_margin = 45
+        self.assertEqual(order._approval_requirements()['margin'], 'gm')
+        order.order_line.price_unit = 500
+        self.assertEqual(order._approval_requirements()['margin'], 'gm')
+        with self.assertRaises(ValidationError):
+            self.env.company.write({
+                'mobikey_sm_discount_limit': 6,
+                'mobikey_gm_discount_limit': 5,
+            })
+        with self.assertRaises(ValidationError):
+            self.env.company.mobikey_minimum_margin = 101
+
+    def test_native_stages_do_not_cancel_pending_quote(self):
+        lead = self.env['crm.lead'].create({'name': 'Opportunity', 'type': 'opportunity', 'user_id': self.sales.id, 'company_id': self.env.company.id})
+        order = self.quote((10,), opportunity_id=lead.id)
+        order.action_submit_approvals()
+        stage = self.env['crm.stage'].create({'name': 'Any native stage'})
+        lead.stage_id = stage
+        self.assertEqual(order.state, 'draft')
+        self.assertEqual(order.approval_status, 'pending')
+
+    def test_revenue_primary_alternatives_and_cancellation(self):
+        lead = self.env['crm.lead'].create({'name': 'Forecast', 'type': 'opportunity', 'user_id': self.sales.id, 'company_id': self.env.company.id,
+                                          'expected_revenue': 500})
+        first = self.quote(opportunity_id=lead.id)
+        self.assertEqual(lead.primary_quotation_id, first)
+        self.assertEqual(lead.expected_revenue, first.amount_total)
+        second = self.quote(opportunity_id=lead.id)
+        second.order_line.price_unit = 5000
+        self.assertEqual(lead.expected_revenue, 1000)
+        first.order_line.price_unit = 900
+        self.assertEqual(lead.expected_revenue, 900)
+        first.action_cancel()
+        self.assertFalse(lead.primary_quotation_id)
+        self.assertEqual(lead.expected_revenue, 0)
+
+    def test_revision_permissions_and_notifications(self):
+        order = self.quote((10,))
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        snapshot = approval.financial_snapshot
+        with self.assertRaises(AccessError):
+            approval.with_user(self.sales).read(['financial_snapshot'])
+        self.assertEqual(approval.assigned_user_ids, self.hq)
+        self.assertEqual(len(approval.activity_ids), 1)
+        with self.assertRaises(AccessError):
+            approval.with_user(self.sales).action_approve()
+        with self.assertRaises(AccessError):
+            approval.with_user(self.hq).write({'status': 'approved'})
+        approval.with_user(self.hq).action_approve()
+        with self.assertRaises(UserError):
+            order.order_line.discount = 15
+        messages_before_revision = order.message_ids
+        order.action_revise_quotation()
+        revision_messages = order.message_ids - messages_before_revision
+        self.assertTrue(any('revision 1 was withdrawn' in message.body for message in revision_messages))
+        self.assertTrue(any('Revision 2' in message.body for message in revision_messages))
+        order.order_line.discount = 15
+        self.assertEqual(approval.financial_snapshot, snapshot)
+        with self.assertRaises(UserError):
+            approval.with_user(self.hq).action_approve()
+        order.action_submit_approvals()
+        self.assertEqual(len(order.sudo().approval_ids), 2)
+        copy = order.copy()
+        self.assertFalse(copy.approval_submitted)
+        self.assertFalse(copy.sudo().approval_ids)
+
+    def test_financial_fields_are_not_readable(self):
+        order = self.quote()
+        for record, field in [(self.product, 'standard_price'), (self.product.product_tmpl_id, 'standard_price'),
+                              (self.product, 'avg_cost'), (self.product, 'total_value'),
+                              (self.product, 'target_margin'), (order, 'margin'),
+                              (order.order_line, 'purchase_price'), (order.order_line, 'margin_percent')]:
+            with self.assertRaises(AccessError):
+                record.with_user(self.sales).read([field])
+        self.assertNotIn('standard_price', self.product.with_user(self.sales).fields_get())
+        self.assertNotIn('margin', order.with_user(self.sm).fields_get())
+        self.assertEqual(order.order_line.with_user(self.sales).price_unit, 1000)
+        with self.assertRaises(AccessError):
+            self.env['product.product'].with_user(self.sales).search_count([('standard_price', '>', 0)])
+        with self.assertRaises(AccessError):
+            self.env['sale.order.line'].with_user(self.sales)._read_group([], [], ['margin:sum'])
+        self.assertNotIn('price', self.env['product.supplierinfo'].with_user(self.sales).fields_get())
+        self.assertNotIn('value', self.env['stock.move'].with_user(self.sales).fields_get())
+        self.assertNotIn('standard_price', self.env['stock.lot'].with_user(self.sales).fields_get())
+
+    def test_notifications_exclude_customer_and_are_deduplicated(self):
+        order = self.quote((10,))
+        before = order.message_ids
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        first = order.message_ids - before
+        order.action_submit_approvals()
+        after = order.message_ids - before
+        self.assertEqual(first, after)
+        requests = after.filtered(lambda message: 'requires Discount approval' in message.body)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(requests.partner_ids, self.hq.partner_id)
+        self.assertNotIn(self.partner, after.partner_ids)
+        self.assertTrue(any('requires Discount approval' in message.body
+                            for message in approval.message_ids))
+
+        before_decision = order.message_ids
+        before_approval_decision = approval.message_ids
+        approval.with_user(self.hq).action_approve()
+        outcome = (order.message_ids - before_decision).filtered(
+            lambda message: 'approved Discount approval' in message.body
+        )
+        self.assertEqual(len(outcome), 1)
+        self.assertIn(self.sales.partner_id, outcome.partner_ids)
+        self.assertNotIn(self.partner, outcome.partner_ids)
+        mirrored = approval.message_ids - before_approval_decision
+        self.assertTrue(any('approved Discount approval' in message.body for message in mirrored))
+        self.assertFalse(mirrored.partner_ids)
+
+    def test_change_request_is_logged_and_sent_to_submitter(self):
+        order = self.quote((10,))
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids.with_user(self.hq)
+        action = approval.action_request_changes()
+        self.assertEqual(action['res_model'], 'mobikey.sale.approval.request.changes')
+        before = order.message_ids
+        wizard = self.env['mobikey.sale.approval.request.changes'].with_user(self.hq).create({
+            'approval_id': approval.id,
+            'reason': 'Please confirm the customer-facing trade terms.',
+        })
+        wizard.action_confirm()
+        outcome = (order.message_ids - before).filtered(
+            lambda message: 'requested changes for Discount approval' in message.body
+        )
+        self.assertEqual(len(outcome), 1)
+        self.assertIn('Please confirm the customer-facing trade terms.', outcome.body)
+        self.assertIn(self.sales.partner_id, outcome.partner_ids)
+        with self.assertRaises(AccessError):
+            approval.write({'change_request': 'Changed after decision'})
+
+    def test_change_request_dialog_requires_reason(self):
+        order = self.quote((10,))
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids.with_user(self.hq)
+        with self.assertRaises(UserError):
+            approval._request_changes('   ')
+
+    def test_trade_in_financing_and_missing_assignment(self):
+        term = self.env['account.payment.term'].create({'name': 'Finance term', 'financing_required': True})
+        order = self.quote(trade_in=True, trade_in_valuation=2000, payment_term_id=term.id)
+        self.assertEqual(order._approval_requirements(), {
+            'trade_in': 'trade_in_pool',
+            'financing': 'finance',
+        })
+        self.env.company.mobikey_trade_in_approver_ids = False
+        with self.assertRaisesRegex(UserError, 'Trade-in approvers'):
+            order.action_submit_approvals()
+
+    def test_trade_in_approvers_are_selected_individually(self):
+        reviewer = new_test_user(self.env, login='workflow.trade.in', groups='base.group_user')
+        self.env.company.mobikey_trade_in_approver_ids = [Command.set(reviewer.ids)]
+        self.assertTrue(reviewer.has_group('mobikey_sale_approvals.group_approver'))
+        order = self.quote(trade_in=True, trade_in_valuation=500)
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        self.assertEqual(approval.assigned_user_ids, reviewer)
+        approval.with_user(reviewer).action_approve()
+        self.assertEqual(approval.status, 'approved')
+
+    def test_submitted_legacy_trade_in_keeps_original_authority(self):
+        order = self.quote(trade_in=True, trade_in_valuation=500)
+        order.sudo().write({'approval_submitted': True})
+        approval = self.env['mobikey.sale.approval'].sudo().create({
+            'order_id': order.id,
+            'revision': order.approval_revision,
+            'category': 'trade_in',
+            'authority': 'sm',
+            'assigned_user_ids': [Command.set(self.sm.ids)],
+            'requested_by': self.sales.id,
+        })
+        self.assertEqual(order._approval_requirements()['trade_in'], 'sm')
+        self.env.company.mobikey_trade_in_approver_ids = [Command.set(self.finance.ids)]
+        self.assertEqual(order._approval_requirements()['trade_in'], 'sm')
+        self.assertEqual(approval.assigned_user_ids, self.sm)
+
+    def test_financing_and_policy_are_snapshotted(self):
+        term = self.env['account.payment.term'].create({
+            'name': 'Snapshot finance term',
+            'financing_required': True,
+        })
+        order = self.quote((1,), payment_term_id=term.id)
+        order.action_submit_approvals()
+        self.assertEqual(order.sudo().approval_policy_snapshot['discount_sm_limit'], 2.0)
+        self.assertTrue(order.financing_approval_required)
+        self.env.company.write({
+            'mobikey_sm_discount_limit': 0.5,
+            'mobikey_gm_discount_limit': 4,
+            'mobikey_minimum_margin': 30,
+        })
+        term.financing_required = False
+        self.assertEqual(order._approval_requirements()['discount'], 'sm')
+        self.assertIn('financing', order._approval_requirements())
+        self.assertTrue(order.financing_approval_required)
+        order.action_revise_quotation()
+        self.assertFalse(order.sudo().approval_policy_snapshot)
+        self.assertEqual(order._approval_requirements()['discount'], 'gm')
+        self.assertNotIn('financing', order._approval_requirements())
+
+    def test_top_actions_and_multiple_current_approvals(self):
+        order = self.quote((1,))
+        order.action_submit_approvals()
+        self.assertEqual(order.with_user(self.sm).my_actionable_approval_count, 1)
+        order.with_user(self.sm).action_approve_current()
+        self.assertEqual(order.sudo().approval_ids.status, 'approved')
+
+        term = self.env['account.payment.term'].create({
+            'name': 'Multiple finance term',
+            'financing_required': True,
+        })
+        multiple = self.quote(
+            trade_in=True,
+            trade_in_valuation=2000,
+            payment_term_id=term.id,
+        )
+        multiple.action_submit_approvals()
+        self.assertEqual(multiple.with_user(self.finance).my_actionable_approval_count, 2)
+        action = multiple.with_user(self.finance).action_review_my_approvals()
+        self.assertEqual(action['domain'], [('id', 'in', multiple.with_user(self.finance)._my_actionable_approvals().ids)])
+
+    def test_preferred_language_is_editable_and_tracked(self):
+        lead = self.env['crm.lead'].with_user(self.sales).create({
+            'name': 'Language preference',
+            'type': 'opportunity',
+        })
+        lead.preferred_language = 'sw'
+        self.assertEqual(lead.preferred_language, 'sw')
+        self.assertTrue(lead._fields['preferred_language'].tracking)
+
+    def test_repeated_user_copies_receive_unique_logins(self):
+        source = new_test_user(self.env, login='copy.source@example.invalid', groups='base.group_user')
+        first = source.copy()
+        second = source.copy()
+        copied_copy = first.copy()
+        self.assertEqual(first.login, 'copy.source@example.invalid (copy)')
+        self.assertEqual(second.login, 'copy.source@example.invalid (copy 2)')
+        self.assertEqual(copied_copy.login, 'copy.source@example.invalid (copy 3)')
+
+        explicit = source.copy({'login': 'copy.explicit@example.invalid'})
+        self.assertEqual(explicit.login, 'copy.explicit@example.invalid')
+
+    def test_no_exception_confirmation_and_handover(self):
+        self.product.is_storable = True
+        order = self.quote(after_sales_user_id=self.sales.id)
+        order.action_confirm()
+        self.assertEqual(order.state, 'sale')
+        activities = order.activity_ids
+        order.sudo()._create_handover()
+        self.assertEqual(order.activity_ids, activities)
+
+    def test_confirmed_downpayment_section_does_not_invalidate_approval(self):
+        order = self.quote((10,))
+        order.action_submit_approvals()
+        order.sudo().approval_ids.with_user(self.hq).action_approve()
+        order.action_confirm()
+        order._create_down_payment_section_line_if_needed()
+        order._check_commercial_approval()
+        with self.assertRaises(UserError):
+            order.order_line.filtered('product_id').write({'is_downpayment': True})
+
+    def test_direct_state_create_is_not_an_approval_bypass(self):
+        with self.assertRaises(UserError):
+            self.quote((10,), state='sale')
+        with self.assertRaises(UserError):
+            self.env['sale.order'].with_user(self.sales).with_context(install_demo=True).create({
+                'partner_id': self.partner.id,
+                'state': 'sent',
+            })
+
+    def test_odoo_demo_loader_can_create_non_draft_orders(self):
+        order = self.env['sale.order'].sudo().with_context(install_demo=True).create({
+            'partner_id': self.partner.id,
+            'state': 'sent',
+        })
+        self.assertEqual(order.state, 'sent')
+
+    def test_force_demo_loads_with_approval_workflow(self):
+        force_demo(self.env)
+        self.assertTrue(self.env.ref('stock.warehouse_company_1').exists())
+        self.assertTrue(self.env.ref('stock.product_cable_management_box').exists())
+        self.assertTrue(self.env.ref('sale.sale_order_4').exists())
+        self.assertTrue(self.env.ref('sale_management.sale_order_template_1').exists())
+        self.assertTrue(self.env.ref(
+            'sale_pdf_quote_builder.sale_pdf_header_demo_page'
+        ).exists())
+
+    def test_confirmation_preserves_quotation_pricing_date(self):
+        order = self.quote(date_order='2026-01-15 10:00:00')
+        quote_date = order.date_order
+        order.action_confirm()
+        self.assertEqual(order.approval_date_order, quote_date)
+
+    def test_company_authority_is_checked(self):
+        other_company = self.env['res.company'].create({'name': 'Other country'})
+        self.env.company.mobikey_hq_ids = False
+        other_company.mobikey_hq_ids = self.hq
+        order = self.quote((10,))
+        before_order = order.message_ids
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        self.assertEqual(approval.assigned_user_ids, self.hq)
+        self.assertEqual(len(approval.activity_ids), 1)
+        self.assertTrue(any(
+            'requires Discount approval' in message.body
+            for message in order.message_ids - before_order
+        ))
+        self.assertTrue(any(
+            'requires Discount approval' in message.body
+            for message in approval.message_ids
+        ))
+
+    def test_discount_precedes_margin_and_zero_price_is_safe(self):
+        order = self.quote((2,))
+        order.order_line.sudo().purchase_price = 1100
+        order.action_submit_approvals()
+        approvals = order.sudo().approval_ids
+        margin = approvals.filtered(lambda a: a.category == 'margin')
+        with self.assertRaises(UserError):
+            margin.with_user(self.gm).action_approve()
+        approvals.filtered(lambda a: a.category == 'discount').with_user(self.sm).action_approve()
+        margin.with_user(self.gm).action_approve()
+        zero = self.quote()
+        zero.order_line.price_unit = 0
+        self.assertIn('margin', zero._approval_requirements())
+
+    def test_confirmation_signature_and_issue_are_gated(self):
+        order = self.quote((10,))
+        for action in [order.action_confirm, order.action_quotation_send,
+                       lambda: order.sudo().write({'signature': 'dGVzdA=='}),
+                       lambda: order.write({'state': 'sale'})]:
+            with self.assertRaises(UserError):
+                action()
+        order.action_submit_approvals()
+        order.sudo().approval_ids.with_user(self.hq).action_approve()
+        order.action_confirm()
+        self.assertEqual(order.state, 'sale')
+
+    def test_report_and_composer_check_before_output(self):
+        order = self.quote((10,))
+        with self.assertRaises(UserError):
+            self.env['ir.actions.report']._render_qweb_html('sale.action_report_saleorder', order.ids)
+        wizard = self.env['mail.compose.message'].with_user(self.sales).create({
+            'model': 'sale.order', 'res_ids': str(order.ids), 'composition_mode': 'comment',
+            'partner_ids': [Command.set(self.partner.ids)], 'body': 'Customer quotation'})
+        with self.assertRaises(UserError):
+            wizard._action_send_mail()
+
+    def test_revenue_currency_tax_and_primary_switch(self):
+        lead = self.env['crm.lead'].create({'name': 'Currency forecast', 'type': 'opportunity',
+            'company_id': self.env.company.id, 'user_id': self.sales.id})
+        foreign = self.env.ref('base.EUR')
+        foreign.active = True
+        pricelist = self.env['product.pricelist'].create({'name': 'Foreign offer', 'currency_id': foreign.id})
+        tax = self.env['account.tax'].create({'name': 'Test tax', 'amount': 10, 'type_tax_use': 'sale'})
+        order = self.quote(opportunity_id=lead.id, pricelist_id=pricelist.id)
+        order.order_line.tax_ids = tax
+        expected = foreign._convert(order.amount_total, self.env.company.currency_id,
+                                    self.env.company, order.date_order.date())
+        self.assertAlmostEqual(lead.expected_revenue, expected)
+        self.env.company.mobikey_revenue_basis = 'untaxed'
+        expected = foreign._convert(order.amount_untaxed, self.env.company.currency_id,
+                                    self.env.company, order.date_order.date())
+        self.assertAlmostEqual(lead.expected_revenue, expected)
+        alternative = self.quote(opportunity_id=lead.id)
+        lead.primary_quotation_id = alternative
+        self.assertEqual(lead.expected_revenue, alternative.amount_untaxed)
+
+    def test_commission_requires_configured_milestone(self):
+        order = self.quote()
+        order.action_confirm()
+        self.assertFalse(order.sudo().approval_ids)
+        self.env.company.mobikey_commission_milestone = 'confirmation'
+        order.sudo()._ensure_commission_approval()
+        commission = order.sudo().approval_ids
+        self.assertEqual(commission.category, 'commission')
+        commission.with_user(self.gm).action_approve()
+        order.sudo()._ensure_commission_approval()
+        self.assertEqual(order.sudo().approval_ids, commission)
+
+    def test_snapshot_is_stable(self):
+        lead = self.env['crm.lead'].create({'name': 'Forecast snapshot', 'type': 'opportunity',
+            'company_id': self.env.company.id, 'user_id': self.sales.id, 'expected_revenue': 500, 'probability': 40})
+        self.env['mobikey.forecast.snapshot'].sudo()._cron_snapshot()
+        snapshot = self.env['mobikey.forecast.snapshot'].search([('lead_id', '=', lead.id)])
+        self.assertEqual(snapshot.weighted_revenue, 200)
+        lead.expected_revenue = 1000
+        self.assertEqual(snapshot.expected_revenue, 500)
+
+    @mute_logger('odoo.addons.mobikey_sale_approvals.hooks')
+    def test_cutover_preserves_history_and_does_not_duplicate_lines(self):
+        from ..hooks import post_init_hook
+        lead = self.env['crm.lead'].create({'name': 'Historical opportunity', 'type': 'opportunity',
+            'company_id': self.env.company.id, 'user_id': self.sales.id,
+            'discount_approval_status': 'approved', 'discount_approved_by': self.hq.id,
+            'product_line_ids': [Command.create({'product_id': self.product.id, 'quantity': 2, 'discount': 1})]})
+        order = self.quote(opportunity_id=lead.id, order_line=[])
+        queued = self.env['mail.mail'].sudo().create({'model': 'crm.lead', 'res_id': lead.id,
+            'subject': 'Trade In Approval Request', 'body_html': '<p>Legacy request</p>',
+            'email_to': 'customer@example.invalid'})
+        post_init_hook(self.env)
+        self.assertEqual(len(order.order_line), 1)
+        self.assertEqual(order.order_line.product_uom_qty, 2)
+        self.assertEqual(lead.discount_approval_status, 'approved')
+        self.assertFalse(order.sudo().approval_ids)
+        self.assertEqual(queued.state, 'cancel')
+        post_init_hook(self.env)
+        self.assertEqual(len(order.order_line), 1)
