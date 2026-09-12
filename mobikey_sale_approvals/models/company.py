@@ -1,4 +1,4 @@
-from odoo import api, fields, models, _
+from odoo import Command, api, fields, models, _
 from odoo.exceptions import ValidationError
 
 
@@ -15,7 +15,12 @@ class Company(models.Model):
     mobikey_trade_in_configured = fields.Boolean(string='Trade-in threshold verified')
     mobikey_trade_in_authority = fields.Selection(
         [('either', 'Country GM or Finance'), ('both', 'Country GM and Finance')],
-        default='either', required=True)
+        default='either', required=True,
+        help='Legacy role-based trade-in policy retained for existing approval history.')
+    mobikey_trade_in_approver_ids = fields.Many2many(
+        'res.users', 'mobikey_company_trade_in_approver_rel',
+        string='Trade-in approvers',
+        help='Select one or more named people. Any selected person can approve a new trade-in request.')
     mobikey_commission_milestone = fields.Selection(
         [('confirmation', 'Order confirmation'), ('invoicing', 'Fully invoiced'),
          ('payment', 'Fully paid')], string='Commission eligibility')
@@ -47,13 +52,63 @@ class Company(models.Model):
                     'The Sales Manager discount limit cannot exceed the Country GM discount limit.'
                 ))
 
+    @api.constrains('mobikey_trade_in_approver_ids')
+    def _check_trade_in_approvers(self):
+        for company in self:
+            invalid = company.mobikey_trade_in_approver_ids.filtered(
+                lambda user: not user.active or user.share or company not in user.company_ids
+            )
+            if invalid:
+                raise ValidationError(_(
+                    'Trade-in approvers must be active internal users with access to this company: %s',
+                    ', '.join(invalid.mapped('name')),
+                ))
+
+    def _ensure_trade_in_approver_access(self):
+        """A direct company assignment also grants the minimum approval-menu access."""
+        group = self.env.ref('mobikey_sale_approvals.group_approver', raise_if_not_found=False)
+        if group:
+            self.sudo().mapped('mobikey_trade_in_approver_ids').write({
+                'group_ids': [Command.link(group.id)],
+            })
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        companies = super().create(vals_list)
+        companies._ensure_trade_in_approver_access()
+        return companies
+
+    def write(self, values):
+        result = super().write(values)
+        if 'mobikey_trade_in_approver_ids' in values:
+            self._ensure_trade_in_approver_access()
+        return result
+
     def _mobikey_approvers(self, role):
         self.ensure_one()
+        if role == 'trade_in_pool':
+            return self.sudo().mobikey_trade_in_approver_ids.filtered(
+                lambda user: user.active and not user.share and self in user.company_ids
+            )
         roles = role.split('|')
         users = self.env['res.users']
-        groups = {'sm': 'sales_manager', 'gm': 'country_gm', 'hq': 'hq', 'finance': 'finance'}
+        groups = {
+            'sm': 'mobikey_crm.group_mobikey_sales_manager',
+            'gm': 'mobikey_crm.group_mobikey_country_gm',
+            'hq': 'mobikey_crm.group_mobikey_hq',
+            'finance': 'mobikey_crm.group_mobikey_finance',
+        }
         for key in roles:
             assigned = self.sudo()[f'mobikey_{key}_ids']
-            users |= assigned.filtered(lambda u: u.active and not u.share and self in u.company_ids
-                                       and u.has_group(f'mobikey_crm.group_mobikey_{groups[key]}'))
+            eligible_assigned = assigned.filtered(
+                lambda user: user.active and not user.share and self in user.company_ids
+                and user.has_group(groups[key])
+            )
+            if eligible_assigned:
+                users |= eligible_assigned
+                continue
+            role_group = self.env.ref(groups[key])
+            users |= role_group.sudo().users.filtered(
+                lambda user: user.active and not user.share and self in user.company_ids
+            )
         return users

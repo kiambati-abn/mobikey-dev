@@ -239,16 +239,14 @@ class SaleOrder(models.Model):
         if order.trade_in:
             if order.trade_in_valuation <= 0:
                 raise ValidationError(_('Enter a positive trade-in valuation.'))
-            if not order.company_id.mobikey_trade_in_configured:
-                raise UserError(_('An administrator must verify the company trade-in threshold.'))
-            value = order.currency_id._convert(order.trade_in_valuation, order.company_id.currency_id,
-                                               order.company_id, fields.Date.to_date(order.date_order))
-            if value <= order.company_id.mobikey_trade_in_threshold:
-                requirements['trade_in'] = 'sm'
-            elif order.company_id.mobikey_trade_in_authority == 'both':
-                requirements.update(trade_in='gm', trade_in_finance='finance')
+            existing_trade_in = order._current_approvals().filtered(
+                lambda approval: approval.category in ('trade_in', 'trade_in_finance')
+            ) if order.approval_submitted else self.env['mobikey.sale.approval']
+            if existing_trade_in:
+                for approval in existing_trade_in:
+                    requirements[approval.category] = approval.authority
             else:
-                requirements['trade_in'] = 'gm|finance'
+                requirements['trade_in'] = 'trade_in_pool'
         return requirements
 
     def _current_approvals(self):
@@ -290,6 +288,13 @@ class SaleOrder(models.Model):
                            for category, role in requirements.items()}
             missing = [category for category, users in assignments.items() if not users]
             if missing:
+                if 'trade_in' in missing:
+                    raise UserError(_(
+                        'Select at least one eligible person under Company → Sales approvals → '
+                        'Trade-in approvers. The person must be an active internal user with access '
+                        'to %(company)s.',
+                        company=order.company_id.display_name,
+                    ))
                 raise UserError(_('Configure eligible company approvers for: %s', ', '.join(missing)))
             super(SaleOrder, order.sudo()).write({'approval_submitted': True,
                 'approval_policy_snapshot': policy,
