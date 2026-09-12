@@ -108,7 +108,10 @@ class Company(models.Model):
                 users |= eligible_assigned
                 continue
             role_group = self.env.ref(groups[key])
-            users |= role_group.sudo().users.filtered(
-                lambda user: user.active and not user.share and self in user.company_ids
-            )
+            users |= self.env['res.users'].sudo().search([
+                ('group_ids', 'in', [role_group.id]),
+                ('active', '=', True),
+                ('share', '=', False),
+                ('company_ids', 'in', [self.id]),
+            ])
         return users
