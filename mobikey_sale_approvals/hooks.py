@@ -33,8 +33,8 @@ def post_init_hook(env):
         if primary.state != 'draft':
             continue
         values = {}
-        mapping = {'payment_terms_type': 'payment_term_id', 'price_list': 'pricelist_id',
-                   'delivery_location': 'warehouse_id', 'bank_id': 'bank_id',
+        mapping = {'price_list': 'pricelist_id', 'delivery_location': 'warehouse_id',
+                   'bank_id': 'bank_id',
                    'after_sales_user_id': 'after_sales_user_id'}
         for source, target in mapping.items():
             if lead[source] and not primary[target]:

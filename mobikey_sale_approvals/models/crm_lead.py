@@ -78,7 +78,7 @@ class CrmLead(models.Model):
                        default_insurance_required=self.insurance_required,
                        default_after_sales_user_id=self.after_sales_user_id.id)
         # Legacy terms are initial defaults only. The quotation becomes authoritative.
-        for source, target in [('payment_terms_type', 'payment_term_id'), ('price_list', 'pricelist_id'),
+        for source, target in [('price_list', 'pricelist_id'),
                                ('delivery_location', 'warehouse_id')]:
             if self[source]:
                 context['default_' + target] = self[source].id

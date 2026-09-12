@@ -20,7 +20,9 @@ Expected revenue is the sum of every linked non-cancelled quotation and order. A
 
 Approval notifications use explicit internal recipients and each user's Odoo notification preference. Every workflow event is logged on both the quotation and approval chatter, while only the quotation event notifies recipients. Margin requests activate after discount approval; an HQ margin request stays queued until the Country GM approves. Resolved/withdrawn requests close their activities; overdue requests receive at most one reminder per day. The approval form shows category-specific values captured at submission. Dashboard sharing emails contain login-required links so each recipient opens the report with their own permissions.
 
-Deal Type and Financing Required are visible on opportunities and quotations. Selecting Financing enables Financing Required; Fleet and Lease may also retain financing. When financing is required, only payment terms marked **Financing Required** are valid. A financing-enabled quotation term updates the linked opportunity, and payment terms remain the approval trigger.
+Deal Type and Financing Required are visible on opportunities and quotations. Selecting Financing enables Financing Required; Fleet and Lease may also retain financing. Payment Terms are maintained only on quotations because one opportunity can have several offers with different terms. When financing is required, only payment terms marked **Financing Required** are valid. A financing-enabled quotation term updates the linked opportunity, and payment terms remain the approval trigger.
+
+The Qualification tab records the accessible company or branch where the customer walked in. Preferred Languages are configurable under **CRM → Configuration → Preferred Languages** and can also be added from the qualification field.
 
 ## Coordinated installation / upgrade
 

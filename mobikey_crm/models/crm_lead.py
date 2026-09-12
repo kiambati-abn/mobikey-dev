@@ -17,8 +17,17 @@ class CrmLead(models.Model):
 
     preferred_language = fields.Selection(
         selection=[('en', 'English'), ('sw', 'Swahili')],
-        string="Preferred Language",
+        string="Legacy Preferred Language",
         default='en',
+        copy=False,
+        help="Historical compatibility field. Use Preferred Language instead.",
+    )
+    preferred_language_id = fields.Many2one(
+        'mobikey.preferred.language',
+        string="Preferred Language",
+        default=lambda self: self.env.ref(
+            'mobikey_crm.preferred_language_english', raise_if_not_found=False
+        ),
         tracking=True,
     )
 
@@ -72,7 +81,7 @@ class CrmLead(models.Model):
 
         store=True,
         tracking=True,
-        help="Automatically set when the selected payment term has 'Financing Required' enabled.",
+        help="Indicates that quotations for this opportunity should use financing payment terms.",
     )
 
     trade_in = fields.Boolean(string="Trade-In Available", tracking=True)
@@ -86,7 +95,9 @@ class CrmLead(models.Model):
 
     payment_terms_type = fields.Many2one(
         'account.payment.term',
-        string="Payment Terms",
+        string="Legacy Payment Terms",
+        copy=False,
+        help="Historical compatibility field. Set payment terms on each quotation.",
     )
 
     expected_delivery_date = fields.Date(string="Expected Delivery Date")
@@ -99,7 +110,28 @@ class CrmLead(models.Model):
 
     referral_name = fields.Char(string="Referral Name")
 
-    walkin_location = fields.Many2one(comodel_name="stock.location", string="Walk-in Location / Branch")
+    walkin_location = fields.Many2one(
+        comodel_name="stock.location",
+        string="Legacy Walk-in Location",
+        copy=False,
+        help="Historical compatibility field. Use Walk-in Location / Branch instead.",
+    )
+    walkin_company_id = fields.Many2one(
+        'res.company',
+        string="Walk-in Location / Branch",
+        tracking=True,
+        help="Company or branch where the customer walked in.",
+    )
+    available_walkin_company_ids = fields.Many2many(
+        'res.company',
+        compute='_compute_available_walkin_company_ids',
+    )
+
+    @api.depends_context('uid')
+    def _compute_available_walkin_company_ids(self):
+        available = self.env.user.company_ids
+        for lead in self:
+            lead.available_walkin_company_ids = available
 
     lead_score = fields.Integer(string="Lead Score", default=0, readonly=True)
 
@@ -151,20 +183,12 @@ class CrmLead(models.Model):
     def _mobikey_financing_values(self, vals, creating=False):
         self.ensure_one()
         values = dict(vals)
-        policy_changed = creating or bool(
-            {'deal_type', 'financing_required', 'payment_terms_type'} & values.keys()
-        )
+        policy_changed = creating or bool({'deal_type', 'financing_required'} & values.keys())
         if not policy_changed:
             return values
         deal_type = values.get('deal_type', self.deal_type)
-        term = (
-            self.env['account.payment.term'].browse(values.get('payment_terms_type'))
-            if 'payment_terms_type' in values else self.payment_terms_type
-        )
-        if deal_type == 'financing' or (term and term.financing_required):
+        if deal_type == 'financing':
             values['financing_required'] = True
-        if term and term.financing_required and deal_type in (False, 'cash'):
-            values['deal_type'] = 'financing'
         return values
 
     @api.model_create_multi
@@ -184,29 +208,6 @@ class CrmLead(models.Model):
     def _onchange_mobikey_deal_type(self):
         if self.deal_type == 'financing':
             self.financing_required = True
-            if self.payment_terms_type and not self.payment_terms_type.financing_required:
-                self.payment_terms_type = False
-
-    @api.onchange('payment_terms_type')
-    def _onchange_mobikey_payment_terms(self):
-        if self.payment_terms_type.financing_required:
-            self.financing_required = True
-            if self.deal_type in (False, 'cash'):
-                self.deal_type = 'financing'
-
-    @api.onchange('financing_required')
-    def _onchange_mobikey_financing_required(self):
-        if self.financing_required and self.payment_terms_type and not self.payment_terms_type.financing_required:
-            self.payment_terms_type = False
-
-    @api.constrains('financing_required', 'payment_terms_type')
-    def _check_mobikey_financing_payment_terms(self):
-        for lead in self:
-            if (lead.financing_required and lead.payment_terms_type
-                    and not lead.payment_terms_type.financing_required):
-                raise ValidationError(_(
-                    'Only payment terms configured as Financing Required can be used when financing is required.'
-                ))
 
     bank_id = fields.Many2one('res.bank', string="Bank")
 

@@ -191,6 +191,44 @@
         <field name="context">{'active_test': False}</field>
     </record>
 
+    <!-- Preferred language -->
+    <record id="mobikey_preferred_language_view_list" model="ir.ui.view">
+        <field name="name">mobikey.preferred.language.list</field>
+        <field name="model">mobikey.preferred.language</field>
+        <field name="arch" type="xml">
+            <list string="Preferred Languages" editable="bottom">
+                <field name="sequence" widget="handle"/>
+                <field name="name"/>
+                <field name="code"/>
+                <field name="active"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="mobikey_preferred_language_view_form" model="ir.ui.view">
+        <field name="name">mobikey.preferred.language.form</field>
+        <field name="model">mobikey.preferred.language</field>
+        <field name="arch" type="xml">
+            <form string="Preferred Language">
+                <sheet>
+                    <group>
+                        <field name="name"/>
+                        <field name="code"/>
+                        <field name="sequence"/>
+                        <field name="active"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_mobikey_preferred_language" model="ir.actions.act_window">
+        <field name="name">Preferred Languages</field>
+        <field name="res_model">mobikey.preferred.language</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'active_test': False}</field>
+    </record>
+
     <!-- ══════════════════════════════════════════════════════
          ACCOUNT.PAYMENT.TERM — extend form view with financing_required
          ══════════════════════════════════════════════════════ -->
@@ -201,7 +239,7 @@
         <field name="arch" type="xml">
             <xpath expr="//label[@for='early_discount']" position="before">
                 <field name="financing_required"
-                       help="When this payment term is selected on a CRM opportunity, the financing approval workflow will be triggered automatically."/>
+                       help="When this payment term is selected on a quotation, the financing approval workflow is triggered automatically."/>
             </xpath>
         </field>
     </record>
@@ -238,5 +276,11 @@
               parent="crm.crm_menu_config"
               action="action_mobikey_industry_type"
               sequence="54"/>
+
+    <menuitem id="menu_mobikey_preferred_language"
+              name="Preferred Languages"
+              parent="crm.crm_menu_config"
+              action="action_mobikey_preferred_language"
+              sequence="55"/>
 
 </odoo>

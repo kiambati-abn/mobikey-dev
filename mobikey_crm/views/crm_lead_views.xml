@@ -19,8 +19,6 @@
             <field name="budget_range" />
             <field name="deal_type" />
             <field name="financing_required" readonly="0" />
-            <field name="payment_terms_type"
-                   domain="[('financing_required', '=', True)] if financing_required else []" />
             <field name="trade_in" />
           </group>
         </group>
@@ -33,7 +31,10 @@
               <field name="industry_type" />
               <field name="is_fleet_customer" />
               <field name="sales_region" />
-              <field name="preferred_language" readonly="0" />
+              <field name="available_walkin_company_ids" invisible="1" />
+              <field name="walkin_company_id"
+                     domain="[('id', 'in', available_walkin_company_ids)]" />
+              <field name="preferred_language_id" />
             </group>
             <group invisible="type != 'lead'">
               <field name="lead_status" />
@@ -42,12 +43,6 @@
             </group>
           </group>
         </page>
-      </xpath>
-      <xpath expr="//page[@name='extra']//group[@name='categorization']/field[@name='referred']" position="after">
-        <field name="walkin_location" />
-      </xpath>
-      <xpath expr="//page[@name='lead']//field[@name='referred']" position="after">
-        <field name="walkin_location" />
       </xpath>
     </field>
   </record>

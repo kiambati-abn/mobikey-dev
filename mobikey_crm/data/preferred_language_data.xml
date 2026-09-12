@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="preferred_language_english" model="mobikey.preferred.language">
+        <field name="name">English</field>
+        <field name="code">en</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="preferred_language_swahili" model="mobikey.preferred.language">
+        <field name="name">Swahili</field>
+        <field name="code">sw</field>
+        <field name="sequence">20</field>
+    </record>
+</odoo>
