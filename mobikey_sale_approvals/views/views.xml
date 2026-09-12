@@ -15,7 +15,6 @@
         <button name="action_review_my_approvals" type="object" string="Review my approvals"
                 class="btn-primary" invisible="my_actionable_approval_count &lt;= 1"/>
         <field name="my_actionable_approval_count" invisible="1"/>
-        <button name="action_import_legacy_products" type="object" string="Import historical CRM products" invisible="state != 'draft' or not opportunity_id or order_line or approval_submitted"/>
       </xpath>
       <xpath expr="//div[@name='button_box']" position="inside">
         <button name="action_view_mobikey_approvals" type="object" class="oe_stat_button"
