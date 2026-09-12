@@ -12,6 +12,8 @@ class CrmLead(models.Model):
     expected_revenue = fields.Float(compute='_compute_quoted_revenue', inverse='_inverse_quoted_revenue',
                                    store=True, readonly=False, compute_sudo=True)
     quotation_revenue_updated_at = fields.Datetime(compute='_compute_quoted_revenue', store=True)
+    revenue_quotation_count = fields.Integer(
+        string='Quotations in expected revenue', compute='_compute_quoted_revenue', store=True)
     operating_country_id = fields.Many2one(related='company_id.country_id', string='Operating country', store=True)
     first_contact_at = fields.Datetime(readonly=True, copy=False)
     first_qualified_at = fields.Datetime(readonly=True, copy=False)
@@ -27,25 +29,36 @@ class CrmLead(models.Model):
                 missing.append(_('Qualified lead status'))
             lead.qualification_readiness = _('Ready to convert') if not missing else _('Still needed: %s', ', '.join(missing))
 
-    @api.depends('primary_quotation_id.amount_total', 'primary_quotation_id.amount_untaxed',
-                 'primary_quotation_id.state', 'primary_quotation_id.currency_id',
-                 'primary_quotation_id.date_order', 'primary_quotation_id.approval_date_order', 'primary_quotation_id.opportunity_id',
+    @api.depends('order_ids.amount_total', 'order_ids.amount_untaxed', 'order_ids.state',
+                 'order_ids.currency_id', 'order_ids.date_order', 'order_ids.approval_date_order',
+                 'order_ids.opportunity_id',
                  'company_id.currency_id', 'company_id.mobikey_revenue_basis', 'initial_expected_revenue')
     def _compute_quoted_revenue(self):
         for lead in self:
-            quote = lead.primary_quotation_id
-            if quote and quote.state != 'cancel' and quote.opportunity_id == lead:
-                amount = quote.amount_total if lead.company_id.mobikey_revenue_basis == 'total' else quote.amount_untaxed
-                lead.expected_revenue = quote.currency_id._convert(amount, lead.company_id.currency_id,
-                    lead.company_id, fields.Date.to_date(quote.approval_date_order or quote.date_order) or fields.Date.context_today(lead))
+            quotations = lead.order_ids.filtered(
+                lambda quote: quote.state != 'cancel' and quote.opportunity_id == lead
+            )
+            if quotations:
+                lead.expected_revenue = sum(
+                    quote.currency_id._convert(
+                        quote.amount_total if lead.company_id.mobikey_revenue_basis == 'total'
+                        else quote.amount_untaxed,
+                        lead.company_id.currency_id,
+                        quote.company_id,
+                        fields.Date.to_date(quote.approval_date_order or quote.date_order)
+                        or fields.Date.context_today(lead),
+                    )
+                    for quote in quotations
+                )
             else:
                 lead.expected_revenue = lead.initial_expected_revenue
+            lead.revenue_quotation_count = len(quotations)
             lead.quotation_revenue_updated_at = fields.Datetime.now()
 
     def _inverse_quoted_revenue(self):
         for lead in self:
-            if lead.primary_quotation_id and lead.primary_quotation_id.state != 'cancel':
-                raise ValidationError(_('Expected revenue is controlled by the primary quotation.'))
+            if lead.order_ids.filtered(lambda quote: quote.state != 'cancel'):
+                raise ValidationError(_('Expected revenue is calculated from the active quotations.'))
             lead.initial_expected_revenue = lead.expected_revenue
 
     @api.constrains('primary_quotation_id', 'company_id')

@@ -33,7 +33,7 @@ class Company(models.Model):
         help='Discounts above the Sales Manager limit and up to this percentage require Country GM approval. Higher discounts require HQ approval.')
     mobikey_minimum_margin = fields.Float(
         string='Minimum acceptable margin (%)', default=20.0, required=True,
-        help='Quotation lines below this margin require Country GM commercial review.')
+        help='An overall quotation margin below this value requires Country GM approval followed by HQ approval.')
     mobikey_sm_ids = fields.Many2many('res.users', 'mobikey_company_sm_rel', string='Assigned Sales Managers')
     mobikey_gm_ids = fields.Many2many('res.users', 'mobikey_company_gm_rel', string='Assigned Country GMs')
     mobikey_hq_ids = fields.Many2many('res.users', 'mobikey_company_hq_rel', string='Assigned HQ approvers')

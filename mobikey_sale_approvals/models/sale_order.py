@@ -10,6 +10,7 @@ from .security import FINANCIAL
 ORDER_TERMS = {'order_line', 'partner_id', 'partner_shipping_id', 'company_id', 'currency_id',
     'pricelist_id', 'payment_term_id', 'date_order', 'validity_date', 'commitment_date',
     'warehouse_id', 'trade_in', 'trade_in_valuation', 'bank_id', 'insurance_required', 'deal_type',
+    'financing_required',
     'mobikey_delivery_terms', 'note'}
 LINE_TERMS = {'product_id', 'product_uom_qty', 'product_uom_id', 'price_unit', 'discount',
     'tax_ids', 'purchase_price', 'reconditioning_cost', 'target_margin_snapshot', 'name',
@@ -193,11 +194,16 @@ class SaleOrder(models.Model):
     def _company_approval_policy(self):
         self.ensure_one()
         company = self.company_id
+        lines = self.sudo().order_line.filtered(lambda line: not line.display_type and not line.is_downpayment)
         return {
-            'version': 'company_v1',
+            'version': 'company_product_v2',
             'discount_sm_limit': company.mobikey_sm_discount_limit,
             'discount_gm_limit': company.mobikey_gm_discount_limit,
             'minimum_margin': company.mobikey_minimum_margin,
+            'product_margin_limits': {
+                str(line.id): line.product_id.product_tmpl_id.with_company(company).mobikey_minimum_margin
+                for line in lines
+            },
             'financing_required': bool(self.payment_term_id.financing_required),
         }
 
@@ -207,6 +213,83 @@ class SaleOrder(models.Model):
         if order.approval_submitted and order.approval_policy_snapshot:
             return order.approval_policy_snapshot
         return order._company_approval_policy()
+
+    def _margin_analysis(self, policy=None):
+        """Calculate frozen line and overall margin facts for approval routing."""
+        self.ensure_one()
+        order = self.sudo().with_company(self.company_id)
+        policy = policy or order._approval_policy()
+        lines = order.order_line.filtered(lambda l: not l.display_type and not l.is_downpayment)
+        product_limits = policy.get('product_margin_limits', {})
+        line_results = []
+        total_revenue = total_cost = 0.0
+        for line in lines:
+            revenue = line.price_subtotal
+            cost = line.purchase_price * line.product_uom_qty + line.reconditioning_cost
+            profit = revenue - cost
+            margin = 100 * profit / revenue if revenue else 0.0
+            if policy.get('version') == 'legacy_product_v1':
+                product_limit = line.target_margin_snapshot
+            elif policy.get('version') == 'company_v1':
+                product_limit = policy['minimum_margin']
+            else:
+                product_limit = product_limits.get(str(line.id), 0.0)
+            product_breach = profit < 0 or bool(product_limit and margin < product_limit)
+            line_results.append({
+                'line_id': line.id,
+                'product': line.product_id.display_name,
+                'quantity': line.product_uom_qty,
+                'revenue': revenue,
+                'cost': cost,
+                'profit': profit,
+                'margin': margin,
+                'product_limit': product_limit,
+                'product_breach': product_breach,
+            })
+            total_revenue += revenue
+            total_cost += cost
+        total_profit = total_revenue - total_cost
+        overall_margin = 100 * total_profit / total_revenue if total_revenue else 0.0
+        overall_breach = bool(line_results) and (
+            total_profit < 0 or overall_margin < policy['minimum_margin']
+        )
+        return {
+            'currency': order.currency_id.name,
+            'total_revenue': total_revenue,
+            'total_cost': total_cost,
+            'total_profit': total_profit,
+            'overall_margin': overall_margin,
+            'company_limit': policy['minimum_margin'],
+            'overall_breach': overall_breach,
+            'product_breach': any(line['product_breach'] for line in line_results),
+            'lines': line_results,
+        }
+
+    def _approval_preview(self, policy=None):
+        self.ensure_one()
+        order = self.sudo().with_company(self.company_id)
+        policy = policy or order._approval_policy()
+        lines = order.order_line.filtered(lambda line: not line.display_type and not line.is_downpayment)
+        return {
+            'customer': order.partner_id.display_name,
+            'salesperson': order.user_id.display_name,
+            'company': order.company_id.display_name,
+            'currency': order.currency_id.name,
+            'amount_total': order.amount_total,
+            'amount_untaxed': order.amount_untaxed,
+            'discount_lines': [{
+                'product': line.product_id.display_name,
+                'discount': line.discount,
+            } for line in lines if line.discount],
+            'discount_sm_limit': policy['discount_sm_limit'],
+            'discount_gm_limit': policy['discount_gm_limit'],
+            'margin': order._margin_analysis(policy),
+            'deal_type': order.deal_type,
+            'payment_term': order.payment_term_id.display_name,
+            'financing_required': bool(order.payment_term_id.financing_required),
+            'bank': order.bank_id.display_name,
+            'trade_in_valuation': order.trade_in_valuation,
+        }
 
     def _approval_requirements(self, policy=None):
         """Return safe category/authority pairs; financial inputs never leave this method."""
@@ -222,18 +305,15 @@ class SaleOrder(models.Model):
                 else 'gm' if discount <= policy['discount_gm_limit']
                 else 'hq'
             )
-        for line in lines:
-            cost = line.purchase_price * line.product_uom_qty + line.reconditioning_cost
-            revenue = line.price_subtotal
-            profit = revenue - cost
-            margin = 100 * profit / revenue if revenue else 0
-            margin_limit = (
-                line.target_margin_snapshot
-                if policy.get('version') == 'legacy_product_v1'
-                else policy['minimum_margin']
-            )
-            if profit < 0 or margin < margin_limit:
+        margin = order._margin_analysis(policy)
+        if policy.get('version') in ('legacy_product_v1', 'company_v1'):
+            if margin['product_breach']:
                 requirements['margin'] = 'gm'
+        else:
+            if margin['product_breach'] or margin['overall_breach']:
+                requirements['margin'] = 'gm'
+            if margin['overall_breach']:
+                requirements['margin_hq'] = 'hq'
         if policy.get('financing_required'):
             requirements['financing'] = 'finance'
         if order.trade_in:
@@ -282,6 +362,11 @@ class SaleOrder(models.Model):
                 raise UserError(_('Only quotations can be submitted.'))
             if order.approval_submitted:
                 continue
+            if (order.financing_required
+                    and (not order.payment_term_id or not order.payment_term_id.financing_required)):
+                raise UserError(_(
+                    'Select payment terms configured as Financing Required before submitting this quotation.'
+                ))
             policy = order._company_approval_policy()
             requirements = order._approval_requirements(policy=policy)
             assignments = {category: order.company_id._mobikey_approvers(role)
@@ -300,13 +385,29 @@ class SaleOrder(models.Model):
                 'approval_policy_snapshot': policy,
                 'approval_date_order': order.date_order,
                 'approval_fingerprint': order._commercial_fingerprint()})
+            preview = order._approval_preview(policy)
+            created = {}
+            margin_step = 2 if 'discount' in requirements else 1
             for category, role in requirements.items():
-                self.env['mobikey.sale.approval'].sudo().create({
+                dependencies = []
+                if category == 'margin' and created.get('discount'):
+                    dependencies = created['discount'].ids
+                elif category == 'margin_hq' and created.get('margin'):
+                    dependencies = created['margin'].ids
+                sequence = (
+                    margin_step if category == 'margin'
+                    else margin_step + 1 if category == 'margin_hq'
+                    else 1
+                )
+                created[category] = self.env['mobikey.sale.approval'].sudo().create({
                     'order_id': order.id, 'revision': order.approval_revision, 'category': category,
                     'authority': role, 'assigned_user_ids': [(6, 0, assignments[category].ids)],
+                    'sequence': sequence,
+                    'dependency_ids': [(6, 0, dependencies)],
                     'financial_snapshot': {
                         **order._commercial_payload(),
                         'approval_policy': policy,
+                        'preview': preview,
                     },
                     'requested_by': self.env.uid,
                     'deadline': fields.Date.today() + timedelta(days=max(1, order.company_id.mobikey_approval_days)),
@@ -317,9 +418,8 @@ class SaleOrder(models.Model):
     def _activate_approvals(self):
         for order in self:
             approvals = order._current_approvals()
-            discount_pending = any(a.category == 'discount' and a.status != 'approved' for a in approvals)
             for approval in approvals.filtered(lambda a: a.status == 'pending' and not a.notified_at):
-                if approval.category != 'margin' or not discount_pending:
+                if all(dependency.status == 'approved' for dependency in approval.sudo().dependency_ids):
                     approval._notify_request()
 
     def action_revise_quotation(self):

@@ -17,7 +17,10 @@
           <group>
             <field name="purchase_timeframe" />
             <field name="budget_range" />
+            <field name="deal_type" />
             <field name="financing_required" readonly="0" />
+            <field name="payment_terms_type"
+                   domain="[('financing_required', '=', True)] if financing_required else []" />
             <field name="trade_in" />
           </group>
         </group>

@@ -9,15 +9,21 @@ class SaleApproval(models.Model):
     _description = 'Quotation approval decision'
     _inherit = ['mail.thread', 'mail.activity.mixin']
     _rec_name = 'category'
-    _order = 'id desc'
+    _order = 'revision desc, sequence asc, id asc'
 
     order_id = fields.Many2one('sale.order', required=True, ondelete='restrict', index=True)
     company_id = fields.Many2one(related='order_id.company_id', store=True, index=True)
     revision = fields.Integer(required=True)
     category = fields.Selection([('discount', 'Discount'), ('margin', 'Commercial review'),
+        ('margin_hq', 'Commercial review (HQ)'),
         ('financing', 'Financing'), ('trade_in', 'Trade-in'), ('trade_in_finance', 'Trade-in finance'),
         ('commission', 'Commission')], required=True)
     authority = fields.Char(required=True)
+    authority_label = fields.Char(compute='_compute_authority_label', string='Required authority')
+    sequence = fields.Integer(string='Step', default=1, required=True, readonly=True, index=True)
+    dependency_ids = fields.Many2many(
+        'mobikey.sale.approval', 'mobikey_sale_approval_dependency_rel',
+        'approval_id', 'dependency_id', string='Prior approvals', readonly=True)
     financial_snapshot = fields.Json(readonly=True, groups=FINANCIAL,
         help='Immutable commercial and cost inputs captured when this revision was submitted.')
     assigned_user_ids = fields.Many2many('res.users', string='Assigned approvers', readonly=True)
@@ -33,6 +39,15 @@ class SaleApproval(models.Model):
     deadline = fields.Date()
     turnaround_hours = fields.Float(compute='_compute_turnaround', store=True)
     can_decide = fields.Boolean(compute='_compute_can_decide')
+    workflow_state = fields.Selection([
+        ('queued', 'Queued'), ('active', 'Awaiting decision'), ('approved', 'Approved'),
+        ('rejected', 'Changes requested'), ('withdrawn', 'Withdrawn'),
+    ], compute='_compute_workflow_state', string='Workflow state')
+    preview_summary = fields.Text(
+        compute='_compute_preview_summary', compute_sudo=True,
+        groups='mobikey_sale_approvals.group_approver')
+    margin_preview = fields.Text(
+        compute='_compute_preview_summary', compute_sudo=True, groups=FINANCIAL)
     change_request = fields.Text(string='Reason for requested changes',
         help='Customer-safe explanation; never include costs or margins.')
 
@@ -45,9 +60,88 @@ class SaleApproval(models.Model):
             rec.turnaround_hours = ((rec.decided_at - rec.requested_at).total_seconds() / 3600
                                     if rec.decided_at else 0)
 
+    @api.depends('status', 'notified_at')
+    def _compute_workflow_state(self):
+        for approval in self:
+            approval.workflow_state = (
+                approval.status if approval.status != 'pending'
+                else 'active' if approval.notified_at else 'queued'
+            )
+
+    @api.depends('authority')
+    def _compute_authority_label(self):
+        labels = {
+            'sm': _('Sales Manager'),
+            'gm': _('Country GM'),
+            'hq': _('HQ'),
+            'finance': _('Finance'),
+            'gm|hq': _('Country GM or HQ'),
+            'trade_in_pool': _('Trade-in approvers'),
+        }
+        for approval in self:
+            approval.authority_label = labels.get(approval.authority, approval.authority)
+
+    @api.depends('category', 'financial_snapshot')
+    def _compute_preview_summary(self):
+        deal_labels = dict(self.env['sale.order']._fields['deal_type'].selection)
+        for approval in self:
+            preview = (approval.sudo().financial_snapshot or {}).get('preview', {})
+            currency = preview.get('currency') or ''
+            common = [
+                _('Customer: %s', preview.get('customer') or '-'),
+                _('Salesperson: %s', preview.get('salesperson') or '-'),
+                _('Quotation total: %(amount).2f %(currency)s',
+                  amount=preview.get('amount_total') or 0.0, currency=currency),
+            ]
+            if approval.category == 'discount':
+                discounts = preview.get('discount_lines') or []
+                common.extend([
+                    _('Maximum line discount: %.2f%%', max(
+                        (line.get('discount') or 0.0 for line in discounts), default=0.0)),
+                    _('Company limits: Sales Manager %.2f%%; Country GM %.2f%%',
+                      preview.get('discount_sm_limit') or 0.0,
+                      preview.get('discount_gm_limit') or 0.0),
+                ])
+            elif approval.category == 'financing':
+                common.extend([
+                    _('Deal type: %s', deal_labels.get(preview.get('deal_type'), '-') or '-'),
+                    _('Payment terms: %s', preview.get('payment_term') or '-'),
+                    _('Financing bank: %s', preview.get('bank') or '-'),
+                ])
+            elif approval.category in ('trade_in', 'trade_in_finance'):
+                common.append(_('Trade-in valuation: %(amount).2f %(currency)s',
+                                amount=preview.get('trade_in_valuation') or 0.0,
+                                currency=currency))
+            elif approval.category in ('margin', 'margin_hq'):
+                common.append(_('Submitted margin information is shown below.'))
+            approval.preview_summary = '\n'.join(common)
+
+            margin = preview.get('margin') or {}
+            breached = [line for line in margin.get('lines', []) if line.get('product_breach')]
+            margin_lines = [
+                _('Overall quotation margin: %(actual).2f%% (company minimum: %(limit).2f%%)',
+                  actual=margin.get('overall_margin') or 0.0,
+                  limit=margin.get('company_limit') or 0.0),
+            ]
+            margin_lines.extend(_(
+                '%(product)s: %(actual).2f%% margin (product minimum: %(limit).2f%%)',
+                product=line.get('product') or '-', actual=line.get('margin') or 0.0,
+                limit=line.get('product_limit') or 0.0,
+            ) for line in breached)
+            if approval.category == 'margin_hq':
+                gm = approval.order_id.sudo()._current_approvals().filtered(
+                    lambda item: item.category == 'margin'
+                )[:1]
+                margin_lines.append(_(
+                    'Country GM decision: %(status)s%(person)s',
+                    status=dict(gm._fields['status'].selection).get(gm.status, gm.status) if gm else _('Pending'),
+                    person=_(' by %s', gm.decided_by.display_name) if gm and gm.decided_by else '',
+                ))
+            approval.margin_preview = '\n'.join(margin_lines) if approval.category in ('margin', 'margin_hq') else False
+
     @api.depends_context('uid')
     @api.depends('status', 'revision', 'notified_at', 'assigned_user_ids',
-                 'order_id.approval_revision')
+                 'dependency_ids.status', 'order_id.approval_revision')
     def _compute_can_decide(self):
         user = self.env.user
         for approval in self:
@@ -55,6 +149,7 @@ class SaleApproval(models.Model):
             approval.can_decide = bool(
                 approval.status == 'pending'
                 and approval.notified_at
+                and all(dependency.status == 'approved' for dependency in approval.sudo().dependency_ids)
                 and approval.revision == approval.order_id.approval_revision
                 and (administrator or (
                     user in approval.assigned_user_ids
@@ -93,9 +188,8 @@ class SaleApproval(models.Model):
             if approval.category != 'commission':
                 if not order.approval_submitted or order.sudo().approval_fingerprint != order._commercial_fingerprint():
                     raise UserError(_('The quotation has changed; submit a new revision.'))
-                if approval.category == 'margin' and any(a.category == 'discount' and a.status != 'approved'
-                                                        for a in order._current_approvals()):
-                    raise UserError(_('Resolve discount approval first.'))
+                if any(dependency.status != 'approved' for dependency in approval.sudo().dependency_ids):
+                    raise UserError(_('Complete the prior approval steps first.'))
 
     def action_approve(self):
         return self._decide('approved')
@@ -203,12 +297,13 @@ class SaleApproval(models.Model):
                 note=_('Review the assigned decision in Sales approvals.'))
         url = self.get_base_url() + '/odoo/mobikey.sale.approval/' + str(self.id)
         body = Markup(
-            '<p>Quotation <strong>%s</strong>, revision %s, requires %s approval.</p>'
+            '<p>Quotation <strong>%s</strong>, revision %s, step %s, requires %s approval.</p>'
             '<p><strong>Assigned to:</strong> %s</p>'
             '<p><a href="%s">Open approval</a></p>'
         ) % (
             self.order_id.name,
             self.revision,
+            self.sequence,
             self._category_label(),
             ', '.join(self.assigned_user_ids.mapped('name')),
             url,
