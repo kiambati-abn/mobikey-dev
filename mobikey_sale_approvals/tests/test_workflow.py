@@ -283,6 +283,18 @@ class TestQuotationWorkflow(TransactionCase):
         self.assertEqual(lead.preferred_language, 'sw')
         self.assertTrue(lead._fields['preferred_language'].tracking)
 
+    def test_repeated_user_copies_receive_unique_logins(self):
+        source = new_test_user(self.env, login='copy.source@example.invalid', groups='base.group_user')
+        first = source.copy()
+        second = source.copy()
+        copied_copy = first.copy()
+        self.assertEqual(first.login, 'copy.source@example.invalid (copy)')
+        self.assertEqual(second.login, 'copy.source@example.invalid (copy 2)')
+        self.assertEqual(copied_copy.login, 'copy.source@example.invalid (copy 3)')
+
+        explicit = source.copy({'login': 'copy.explicit@example.invalid'})
+        self.assertEqual(explicit.login, 'copy.explicit@example.invalid')
+
     def test_no_exception_confirmation_and_handover(self):
         self.product.is_storable = True
         order = self.quote(after_sales_user_id=self.sales.id)
