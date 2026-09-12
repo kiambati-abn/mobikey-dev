@@ -17,8 +17,17 @@ class CrmLead(models.Model):
 
     preferred_language = fields.Selection(
         selection=[('en', 'English'), ('sw', 'Swahili')],
-        string="Preferred Language",
+        string="Legacy Preferred Language",
         default='en',
+        copy=False,
+        help="Historical compatibility field. Use Preferred Language instead.",
+    )
+    preferred_language_id = fields.Many2one(
+        'mobikey.preferred.language',
+        string="Preferred Language",
+        default=lambda self: self.env.ref(
+            'mobikey_crm.preferred_language_english', raise_if_not_found=False
+        ),
         tracking=True,
     )
 
@@ -72,7 +81,7 @@ class CrmLead(models.Model):
 
         store=True,
         tracking=True,
-        help="Automatically set when the selected payment term has 'Financing Required' enabled.",
+        help="Indicates that quotations for this opportunity should use financing payment terms.",
     )
 
     trade_in = fields.Boolean(string="Trade-In Available", tracking=True)
@@ -101,7 +110,28 @@ class CrmLead(models.Model):
 
     referral_name = fields.Char(string="Referral Name")
 
-    walkin_location = fields.Many2one(comodel_name="stock.location", string="Walk-in Location / Branch")
+    walkin_location = fields.Many2one(
+        comodel_name="stock.location",
+        string="Legacy Walk-in Location",
+        copy=False,
+        help="Historical compatibility field. Use Walk-in Location / Branch instead.",
+    )
+    walkin_company_id = fields.Many2one(
+        'res.company',
+        string="Walk-in Location / Branch",
+        tracking=True,
+        help="Company or branch where the customer walked in.",
+    )
+    available_walkin_company_ids = fields.Many2many(
+        'res.company',
+        compute='_compute_available_walkin_company_ids',
+    )
+
+    @api.depends_context('uid')
+    def _compute_available_walkin_company_ids(self):
+        available = self.env.user.company_ids
+        for lead in self:
+            lead.available_walkin_company_ids = available
 
     lead_score = fields.Integer(string="Lead Score", default=0, readonly=True)
 

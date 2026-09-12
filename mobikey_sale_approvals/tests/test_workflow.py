@@ -355,9 +355,28 @@ class TestQuotationWorkflow(TransactionCase):
             'name': 'Language preference',
             'type': 'opportunity',
         })
-        lead.preferred_language = 'sw'
-        self.assertEqual(lead.preferred_language, 'sw')
-        self.assertTrue(lead._fields['preferred_language'].tracking)
+        swahili = self.env.ref('mobikey_crm.preferred_language_swahili')
+        french = self.env['mobikey.preferred.language'].with_user(self.sales).create({
+            'name': 'French', 'code': 'fr',
+        })
+        lead.preferred_language_id = swahili
+        self.assertEqual(lead.preferred_language_id, swahili)
+        lead.preferred_language_id = french
+        self.assertEqual(lead.preferred_language_id, french)
+        self.assertTrue(lead._fields['preferred_language_id'].tracking)
+
+    def test_walkin_branch_uses_accessible_companies(self):
+        branch = self.env['res.company'].create({
+            'name': 'Walk-in Branch', 'parent_id': self.env.company.id,
+        })
+        self.env.user.company_ids = [Command.link(branch.id)]
+        lead = self.env['crm.lead'].create({
+            'name': 'Branch visit', 'type': 'opportunity', 'company_id': self.env.company.id,
+            'user_id': self.sales.id, 'walkin_company_id': branch.id,
+        })
+        self.assertEqual(lead.walkin_company_id, branch)
+        self.assertIn(branch, lead.available_walkin_company_ids)
+        self.assertEqual(lead._fields['walkin_company_id'].comodel_name, 'res.company')
 
     def test_repeated_user_copies_receive_unique_logins(self):
         source = new_test_user(self.env, login='copy.source@example.invalid', groups='base.group_user')

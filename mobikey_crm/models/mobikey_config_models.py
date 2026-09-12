@@ -11,6 +11,7 @@ mobikey.intended.use   →  replaces intended_use   (Selection)
 mobikey.budget.range   →  replaces budget_range   (Selection)
 mobikey.customer.type  →  replaces customer_type  (Selection) on crm.lead + sale.order
 mobikey.industry.type  →  replaces industry_type  (Selection)
+mobikey.preferred.language → configurable customer language list
 
 account.payment.term   →  extended with financing_required Boolean
 """
@@ -68,18 +69,33 @@ class MobikeyIndustryType(models.Model):
     active = fields.Boolean(default=True)
 
 
+class MobikeyPreferredLanguage(models.Model):
+    _name = 'mobikey.preferred.language'
+    _description = 'Preferred Language'
+    _order = 'sequence, name'
+
+    name = fields.Char(string='Language', required=True, translate=True)
+    code = fields.Char(help='Optional short code used for reporting and integrations.')
+    sequence = fields.Integer(default=10)
+    active = fields.Boolean(default=True)
+
+    _code_unique = models.Constraint(
+        'UNIQUE(code)',
+        'The preferred language code must be unique.',
+    )
+
+
 class AccountPaymentTerm(models.Model):
     """Extend account.payment.term with a financing flag.
 
     When this flag is enabled on a payment term and that term is selected
-    on a CRM opportunity, the financing approval workflow is automatically
-    triggered on the opportunity.
+    on a quotation, the financing approval workflow is triggered.
     """
     _inherit = 'account.payment.term'
 
     financing_required = fields.Boolean(
         string="Financing Required",
         default=False,
-        help="If checked, selecting this payment term on a CRM opportunity will "
-             "automatically trigger the financing approval workflow.",
+        help="If checked, selecting this payment term on a quotation automatically "
+             "triggers the financing approval workflow.",
     )

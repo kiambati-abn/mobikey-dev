@@ -22,6 +22,8 @@ Approval notifications use explicit internal recipients and each user's Odoo not
 
 Deal Type and Financing Required are visible on opportunities and quotations. Selecting Financing enables Financing Required; Fleet and Lease may also retain financing. Payment Terms are maintained only on quotations because one opportunity can have several offers with different terms. When financing is required, only payment terms marked **Financing Required** are valid. A financing-enabled quotation term updates the linked opportunity, and payment terms remain the approval trigger.
 
+The Qualification tab records the accessible company or branch where the customer walked in. Preferred Languages are configurable under **CRM → Configuration → Preferred Languages** and can also be added from the qualification field.
+
 ## Coordinated installation / upgrade
 
 1. Back up the database and filestore and rehearse against a controlled staging copy. Review installed Studio rules, automated actions and inherited views first; disable superseded approval automations during cutover.
