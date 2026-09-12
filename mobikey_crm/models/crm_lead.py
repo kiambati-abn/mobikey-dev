@@ -3,7 +3,7 @@
 Stage movement, Won/Lost and quotation creation use native Odoo behaviour.
 """
 from datetime import timedelta
-from odoo import fields, models, _
+from odoo import api, fields, models, _
 from odoo.exceptions import ValidationError
 
 PURCHASE_TIMEFRAME_DAYS = {'immediate': 30, 'short': 60, 'medium': 120, 'long': 180}
@@ -147,6 +147,66 @@ class CrmLead(models.Model):
             ('lease', 'Lease'),
             ('fleet', 'Fleet'),
         ], string="Deal Type")
+
+    def _mobikey_financing_values(self, vals, creating=False):
+        self.ensure_one()
+        values = dict(vals)
+        policy_changed = creating or bool(
+            {'deal_type', 'financing_required', 'payment_terms_type'} & values.keys()
+        )
+        if not policy_changed:
+            return values
+        deal_type = values.get('deal_type', self.deal_type)
+        term = (
+            self.env['account.payment.term'].browse(values.get('payment_terms_type'))
+            if 'payment_terms_type' in values else self.payment_terms_type
+        )
+        if deal_type == 'financing' or (term and term.financing_required):
+            values['financing_required'] = True
+        if term and term.financing_required and deal_type in (False, 'cash'):
+            values['deal_type'] = 'financing'
+        return values
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        empty = self.new({})
+        return super().create([
+            empty._mobikey_financing_values(vals, creating=True) for vals in vals_list
+        ])
+
+    def write(self, vals):
+        result = True
+        for lead in self:
+            result = super(CrmLead, lead).write(lead._mobikey_financing_values(vals)) and result
+        return result
+
+    @api.onchange('deal_type')
+    def _onchange_mobikey_deal_type(self):
+        if self.deal_type == 'financing':
+            self.financing_required = True
+            if self.payment_terms_type and not self.payment_terms_type.financing_required:
+                self.payment_terms_type = False
+
+    @api.onchange('payment_terms_type')
+    def _onchange_mobikey_payment_terms(self):
+        if self.payment_terms_type.financing_required:
+            self.financing_required = True
+            if self.deal_type in (False, 'cash'):
+                self.deal_type = 'financing'
+
+    @api.onchange('financing_required')
+    def _onchange_mobikey_financing_required(self):
+        if self.financing_required and self.payment_terms_type and not self.payment_terms_type.financing_required:
+            self.payment_terms_type = False
+
+    @api.constrains('financing_required', 'payment_terms_type')
+    def _check_mobikey_financing_payment_terms(self):
+        for lead in self:
+            if (lead.financing_required and lead.payment_terms_type
+                    and not lead.payment_terms_type.financing_required):
+                raise ValidationError(_(
+                    'Only payment terms configured as Financing Required can be used when financing is required.'
+                ))
 
     bank_id = fields.Many2one('res.bank', string="Bank")
 
@@ -394,6 +454,7 @@ class CrmLead(models.Model):
             'default_vehicle_condition': self.vehicle_condition,
             'default_customer_type': self.customer_type.id,
             'default_deal_type': self.deal_type,
+            'default_financing_required': self.financing_required,
 
         })
 
