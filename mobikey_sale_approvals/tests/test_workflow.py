@@ -18,7 +18,8 @@ class TestQuotationWorkflow(TransactionCase):
         cls.env.company.write({'mobikey_sm_ids': [Command.set(cls.sm.ids)],
             'mobikey_gm_ids': [Command.set(cls.gm.ids)], 'mobikey_hq_ids': [Command.set(cls.hq.ids)],
             'mobikey_finance_ids': [Command.set(cls.finance.ids)], 'mobikey_trade_in_configured': True,
-            'mobikey_trade_in_threshold': 1000})
+            'mobikey_trade_in_threshold': 1000,
+            'mobikey_trade_in_approver_ids': [Command.set((cls.gm | cls.finance).ids)]})
         cls.partner = cls.env['res.partner'].create({'name': 'Customer', 'email': 'customer@example.invalid'})
         cls.product = cls.env['product.product'].create({'name': 'Vehicle', 'list_price': 1000,
             'standard_price': 600, 'target_margin': 20, 'taxes_id': [Command.clear()]})
@@ -194,12 +195,40 @@ class TestQuotationWorkflow(TransactionCase):
     def test_trade_in_financing_and_missing_assignment(self):
         term = self.env['account.payment.term'].create({'name': 'Finance term', 'financing_required': True})
         order = self.quote(trade_in=True, trade_in_valuation=2000, payment_term_id=term.id)
-        self.assertEqual(order._approval_requirements(), {'trade_in': 'gm|finance', 'financing': 'finance'})
-        self.env.company.mobikey_trade_in_authority = 'both'
-        self.assertEqual(order._approval_requirements()['trade_in_finance'], 'finance')
-        self.env.company.mobikey_finance_ids = False
-        with self.assertRaises(UserError):
+        self.assertEqual(order._approval_requirements(), {
+            'trade_in': 'trade_in_pool',
+            'financing': 'finance',
+        })
+        self.env.company.mobikey_trade_in_approver_ids = False
+        with self.assertRaisesRegex(UserError, 'Trade-in approvers'):
             order.action_submit_approvals()
+
+    def test_trade_in_approvers_are_selected_individually(self):
+        reviewer = new_test_user(self.env, login='workflow.trade.in', groups='base.group_user')
+        self.env.company.mobikey_trade_in_approver_ids = [Command.set(reviewer.ids)]
+        self.assertTrue(reviewer.has_group('mobikey_sale_approvals.group_approver'))
+        order = self.quote(trade_in=True, trade_in_valuation=500)
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        self.assertEqual(approval.assigned_user_ids, reviewer)
+        approval.with_user(reviewer).action_approve()
+        self.assertEqual(approval.status, 'approved')
+
+    def test_submitted_legacy_trade_in_keeps_original_authority(self):
+        order = self.quote(trade_in=True, trade_in_valuation=500)
+        order.sudo().write({'approval_submitted': True})
+        approval = self.env['mobikey.sale.approval'].sudo().create({
+            'order_id': order.id,
+            'revision': order.approval_revision,
+            'category': 'trade_in',
+            'authority': 'sm',
+            'assigned_user_ids': [Command.set(self.sm.ids)],
+            'requested_by': self.sales.id,
+        })
+        self.assertEqual(order._approval_requirements()['trade_in'], 'sm')
+        self.env.company.mobikey_trade_in_approver_ids = [Command.set(self.finance.ids)]
+        self.assertEqual(order._approval_requirements()['trade_in'], 'sm')
+        self.assertEqual(approval.assigned_user_ids, self.sm)
 
     def test_financing_and_policy_are_snapshotted(self):
         term = self.env['account.payment.term'].create({
@@ -309,8 +338,20 @@ class TestQuotationWorkflow(TransactionCase):
         other_company = self.env['res.company'].create({'name': 'Other country'})
         self.env.company.mobikey_hq_ids = False
         other_company.mobikey_hq_ids = self.hq
-        with self.assertRaises(UserError):
-            self.quote((10,)).action_submit_approvals()
+        order = self.quote((10,))
+        before_order = order.message_ids
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        self.assertEqual(approval.assigned_user_ids, self.hq)
+        self.assertEqual(len(approval.activity_ids), 1)
+        self.assertTrue(any(
+            'requires Discount approval' in message.body
+            for message in order.message_ids - before_order
+        ))
+        self.assertTrue(any(
+            'requires Discount approval' in message.body
+            for message in approval.message_ids
+        ))
 
     def test_discount_precedes_margin_and_zero_price_is_safe(self):
         order = self.quote((2,))
