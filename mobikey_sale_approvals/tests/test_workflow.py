@@ -259,6 +259,8 @@ class TestQuotationWorkflow(TransactionCase):
             'company_id': self.env.company.id, 'deal_type': 'fleet',
             'financing_required': True, 'payment_terms_type': finance_term.id,
         })
+        quote_context = lead._prepare_opportunity_quotation_context()
+        self.assertNotIn('default_payment_term_id', quote_context)
         order = self.quote(
             opportunity_id=lead.id, deal_type='fleet', financing_required=True,
             payment_term_id=finance_term.id,
@@ -274,7 +276,7 @@ class TestQuotationWorkflow(TransactionCase):
         with self.assertRaises(ValidationError):
             order.payment_term_id = cash_term
 
-        lead.write({'deal_type': 'financing', 'payment_terms_type': finance_term.id})
+        lead.write({'deal_type': 'financing'})
         self.assertTrue(lead.financing_required)
 
     def test_trade_in_approvers_are_selected_individually(self):
