@@ -45,6 +45,20 @@
       <xpath expr="//field[@name='order_line']/list/field[@name='price_unit']" position="after"><field name="vehicle_year" optional="hide"/><field name="vehicle_mileage" optional="hide"/><field name="reconditioning_cost" optional="hide" groups="mobikey_sale_approvals.group_financial_visibility"/></xpath>
     </field>
   </record>
+  <record id="quotation_list_approval_status" model="ir.ui.view">
+    <field name="name">sale.order.quotation.list.approval.status</field>
+    <field name="model">sale.order</field>
+    <field name="inherit_id" ref="sale.view_quotation_tree"/>
+    <field name="arch" type="xml">
+      <field name="state" position="after">
+        <field name="approval_status" string="Approval Status" widget="badge" optional="show"
+               decoration-muted="approval_status == 'draft'"
+               decoration-success="approval_status == 'ready'"
+               decoration-warning="approval_status == 'pending'"
+               decoration-danger="approval_status == 'rejected'"/>
+      </field>
+    </field>
+  </record>
   <record id="lead_form" model="ir.ui.view"><field name="name">crm.lead.primary.quotation</field><field name="model">crm.lead</field><field name="inherit_id" ref="crm.crm_lead_view_form"/><field name="arch" type="xml">
     <xpath expr="//field[@name='expected_revenue']" position="attributes"><attribute name="readonly">revenue_quotation_count &gt; 0</attribute></xpath>
     <xpath expr="//notebook" position="before"><group string="Forecast source"><field name="revenue_quotation_count" readonly="1"/><field name="quotation_revenue_updated_at"/><field name="operating_country_id"/><field name="qualification_readiness" invisible="type != 'lead'"/></group></xpath>
