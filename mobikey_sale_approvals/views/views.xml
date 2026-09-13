@@ -119,7 +119,7 @@
     <field name="model">product.template</field>
     <field name="inherit_id" ref="product.product_template_form_view"/>
     <field name="arch" type="xml">
-      <xpath expr="//field[@name='standard_price']" position="after">
+      <xpath expr="//div[@name='standard_price_uom']" position="after">
         <field name="mobikey_minimum_margin"
                groups="mobikey_sale_approvals.group_financial_visibility"/>
       </xpath>
