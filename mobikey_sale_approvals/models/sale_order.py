@@ -141,23 +141,6 @@ class SaleOrder(models.Model):
             return self.action_review_my_approvals()
         return approvals.action_request_changes()
 
-    def action_import_legacy_products(self):
-        self._lock_approval()
-        for order in self:
-            if order.state != 'draft' or order.approval_submitted or order.order_line:
-                raise UserError(_('Legacy products can only be imported into an empty draft quotation.'))
-            lead = order.opportunity_id
-            if not lead.product_line_ids:
-                raise UserError(_('There are no historical CRM product lines to import.'))
-            # The user selects the target quotation explicitly; never append duplicates.
-            values = {'order_line': [(0, 0, {'product_id': line.product_id.id,
-                'product_uom_qty': line.quantity, 'price_unit': line.price_unit, 'discount': line.discount})
-                for line in lead.product_line_ids if line.product_id]}
-            order.write(values)
-            if order.order_line:
-                order.order_line[:1].sudo().reconditioning_cost = lead.sudo().reconditioning_cost
-        return True
-
     def copy(self, default=None):
         # copy_data is public/RPC-callable: it must never return financial values
         # to a salesperson. Carry private line costs only after normal ACL-checked

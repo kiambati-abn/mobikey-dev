@@ -15,7 +15,6 @@
         <button name="action_review_my_approvals" type="object" string="Review my approvals"
                 class="btn-primary" invisible="my_actionable_approval_count &lt;= 1"/>
         <field name="my_actionable_approval_count" invisible="1"/>
-        <button name="action_import_legacy_products" type="object" string="Import historical CRM products" invisible="state != 'draft' or not opportunity_id or order_line or approval_submitted"/>
       </xpath>
       <xpath expr="//div[@name='button_box']" position="inside">
         <button name="action_view_mobikey_approvals" type="object" class="oe_stat_button"
@@ -120,7 +119,7 @@
     <field name="model">product.template</field>
     <field name="inherit_id" ref="product.product_template_form_view"/>
     <field name="arch" type="xml">
-      <xpath expr="//field[@name='standard_price']" position="after">
+      <xpath expr="//div[@name='standard_price_uom']" position="after">
         <field name="mobikey_minimum_margin"
                groups="mobikey_sale_approvals.group_financial_visibility"/>
       </xpath>
