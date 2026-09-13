@@ -290,6 +290,76 @@ class TestQuotationWorkflow(TransactionCase):
         approval.with_user(reviewer).action_approve()
         self.assertEqual(approval.status, 'approved')
 
+    def test_named_gm_can_approve_financing_without_finance_role(self):
+        self.assertFalse(self.gm.has_group('mobikey_crm.group_mobikey_finance'))
+        self.env.company.mobikey_finance_ids = [Command.set(self.gm.ids)]
+        term = self.env['account.payment.term'].create({
+            'name': 'GM finance approval term', 'financing_required': True,
+        })
+        order = self.quote(payment_term_id=term.id)
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids.filtered(lambda item: item.category == 'financing')
+        self.assertEqual(approval.assigned_user_ids, self.gm)
+        approval.with_user(self.gm).action_approve()
+        self.assertEqual(approval.status, 'approved')
+
+    def test_named_finance_approver_gets_minimum_access_not_financial_visibility(self):
+        reviewer = new_test_user(self.env, login='workflow.named.finance', groups='base.group_user')
+        self.env.company.mobikey_finance_ids = [Command.set(reviewer.ids)]
+        self.assertTrue(reviewer.has_group('mobikey_sale_approvals.group_approver'))
+        self.assertFalse(reviewer.has_group('mobikey_sale_approvals.group_financial_visibility'))
+        term = self.env['account.payment.term'].create({
+            'name': 'Named finance approval term', 'financing_required': True,
+        })
+        order = self.quote(payment_term_id=term.id)
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids.filtered(lambda item: item.category == 'financing')
+        approval.with_user(reviewer).action_approve()
+        self.assertEqual(approval.status, 'approved')
+
+    def test_explicit_unavailable_approver_does_not_silently_fall_back(self):
+        reviewer = new_test_user(self.env, login='workflow.unavailable.finance', groups='base.group_user')
+        self.env.company.mobikey_finance_ids = [Command.set(reviewer.ids)]
+        reviewer.active = False
+        self.assertFalse(self.env.company._mobikey_approvers('finance'))
+        term = self.env['account.payment.term'].create({
+            'name': 'Unavailable finance approval term', 'financing_required': True,
+        })
+        with self.assertRaisesRegex(UserError, 'financing'):
+            self.quote(payment_term_id=term.id).action_submit_approvals()
+
+    def test_pending_approval_keeps_its_submitted_assignee(self):
+        self.env.company.mobikey_finance_ids = [Command.set(self.gm.ids)]
+        term = self.env['account.payment.term'].create({
+            'name': 'Frozen finance assignee term', 'financing_required': True,
+        })
+        order = self.quote(payment_term_id=term.id)
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids.filtered(lambda item: item.category == 'financing')
+        self.env.company.mobikey_finance_ids = [Command.set(self.finance.ids)]
+        self.assertEqual(approval.assigned_user_ids, self.gm)
+        approval.with_user(self.gm).action_approve()
+        self.assertEqual(approval.status, 'approved')
+
+    def test_assignment_rejects_user_without_company_access(self):
+        other_company = self.env['res.company'].create({'name': 'Restricted approver company'})
+        reviewer = new_test_user(self.env, login='workflow.other.company', groups='base.group_user')
+        with self.assertRaisesRegex(ValidationError, 'Assigned Finance approvers'):
+            other_company.mobikey_finance_ids = [Command.set(reviewer.ids)]
+
+    def test_finance_role_is_independent_of_commercial_role(self):
+        self.gm.write({'group_ids': [Command.link(
+            self.env.ref('mobikey_crm.group_mobikey_finance').id
+        )]})
+        self.assertTrue(self.gm.has_group('mobikey_crm.group_mobikey_country_gm'))
+        self.assertTrue(self.gm.has_group('mobikey_crm.group_mobikey_finance'))
+
+    def test_country_director_role_is_removed_and_hq_inherits_gm(self):
+        self.assertFalse(self.env.ref(
+            'mobikey_crm.group_mobikey_country_director', raise_if_not_found=False
+        ))
+        self.assertTrue(self.hq.has_group('mobikey_crm.group_mobikey_country_gm'))
+
     def test_submitted_legacy_trade_in_keeps_original_authority(self):
         order = self.quote(trade_in=True, trade_in_valuation=500)
         order.sudo().write({'approval_submitted': True})
@@ -443,6 +513,7 @@ class TestQuotationWorkflow(TransactionCase):
 
     def test_company_authority_is_checked(self):
         other_company = self.env['res.company'].create({'name': 'Other country'})
+        self.hq.company_ids = [Command.link(other_company.id)]
         self.env.company.mobikey_hq_ids = False
         other_company.mobikey_hq_ids = self.hq
         order = self.quote((10,))
