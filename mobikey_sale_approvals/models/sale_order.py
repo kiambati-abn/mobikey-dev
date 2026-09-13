@@ -92,8 +92,7 @@ class SaleOrder(models.Model):
         user = self.env.user
         return self._current_approvals().filtered(
             lambda approval: approval.status == 'pending' and approval.notified_at
-            and user in approval.assigned_user_ids
-            and user in approval.company_id._mobikey_approvers(approval.authority)
+            and user in approval._eligible_assigned_users()
         )
 
     @api.depends_context('uid')

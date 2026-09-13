@@ -152,10 +152,17 @@ class SaleApproval(models.Model):
                 and all(dependency.status == 'approved' for dependency in approval.sudo().dependency_ids)
                 and approval.revision == approval.order_id.approval_revision
                 and (administrator or (
-                    user in approval.assigned_user_ids
-                    and user in approval.company_id._mobikey_approvers(approval.authority)
+                    user in approval._eligible_assigned_users()
                 ))
             )
+
+    def _eligible_assigned_users(self):
+        self.ensure_one()
+        company = self.company_id
+        return self.sudo().assigned_user_ids.filtered(
+            lambda user: user.active and not user.share and company in user.company_ids
+            and user.has_group('mobikey_sale_approvals.group_approver')
+        )
 
     @api.model_create_multi
     def create(self, vals_list):
@@ -177,8 +184,7 @@ class SaleApproval(models.Model):
             user = self.env.user
             administrator = approval.category == 'commission' and user.has_group('base.group_system')
             if not administrator and (user.share or approval.company_id not in user.company_ids
-                    or user not in approval.assigned_user_ids
-                    or user not in approval.company_id._mobikey_approvers(approval.authority)):
+                    or user not in approval._eligible_assigned_users()):
                 raise AccessError(_('You are not an assigned eligible approver for this company.'))
             order = approval.order_id
             if approval.status != 'pending' or approval.revision != order.approval_revision:
@@ -348,7 +354,7 @@ class SaleApproval(models.Model):
             approval.invalidate_recordset()
             if approval.status != 'pending' or approval.last_reminded_on == today:
                 continue
-            users = approval.assigned_user_ids & approval.company_id._mobikey_approvers(approval.authority)
+            users = approval._eligible_assigned_users()
             approval._notify_users(users, _('Overdue quotation approval'),
                 Markup('<p>Quotation %s is awaiting your review in Sales approvals.</p>') % approval.order_id.name)
             approval.sudo().write({'last_reminded_on': today})

@@ -1,6 +1,11 @@
 from odoo import Command, api, fields, models, _
 from odoo.exceptions import ValidationError
 
+APPROVER_ASSIGNMENT_FIELDS = (
+    'mobikey_sm_ids', 'mobikey_gm_ids', 'mobikey_hq_ids',
+    'mobikey_finance_ids', 'mobikey_trade_in_approver_ids',
+)
+
 
 class Company(models.Model):
     _inherit = 'res.company'
@@ -20,6 +25,7 @@ class Company(models.Model):
     mobikey_trade_in_approver_ids = fields.Many2many(
         'res.users', 'mobikey_company_trade_in_approver_rel',
         string='Trade-in approvers',
+        domain="[('share', '=', False), ('company_ids', 'in', [id])]",
         help='Select one or more named people. Any selected person can approve a new trade-in request.')
     mobikey_commission_milestone = fields.Selection(
         [('confirmation', 'Order confirmation'), ('invoicing', 'Fully invoiced'),
@@ -34,10 +40,23 @@ class Company(models.Model):
     mobikey_minimum_margin = fields.Float(
         string='Minimum acceptable margin (%)', default=20.0, required=True,
         help='An overall quotation margin below this value requires Country GM approval followed by HQ approval.')
-    mobikey_sm_ids = fields.Many2many('res.users', 'mobikey_company_sm_rel', string='Assigned Sales Managers')
-    mobikey_gm_ids = fields.Many2many('res.users', 'mobikey_company_gm_rel', string='Assigned Country GMs')
-    mobikey_hq_ids = fields.Many2many('res.users', 'mobikey_company_hq_rel', string='Assigned HQ approvers')
-    mobikey_finance_ids = fields.Many2many('res.users', 'mobikey_company_finance_rel', string='Assigned Finance approvers')
+    mobikey_sm_ids = fields.Many2many(
+        'res.users', 'mobikey_company_sm_rel', string='Assigned Sales Managers',
+        domain="[('share', '=', False), ('company_ids', 'in', [id])]",
+        help='Named approvers take precedence. Leave empty to use eligible Sales Manager users.')
+    mobikey_gm_ids = fields.Many2many(
+        'res.users', 'mobikey_company_gm_rel', string='Assigned Country GMs',
+        domain="[('share', '=', False), ('company_ids', 'in', [id])]",
+        help='Named approvers take precedence. Leave empty to use eligible Country GM users.')
+    mobikey_hq_ids = fields.Many2many(
+        'res.users', 'mobikey_company_hq_rel', string='Assigned HQ approvers',
+        domain="[('share', '=', False), ('company_ids', 'in', [id])]",
+        help='Named approvers take precedence. Leave empty to use eligible HQ users.')
+    mobikey_finance_ids = fields.Many2many(
+        'res.users', 'mobikey_company_finance_rel', string='Assigned Finance approvers',
+        domain="[('share', '=', False), ('company_ids', 'in', [id])]",
+        help='Named approvers take precedence and do not need the Finance access role. '
+             'Leave empty to use eligible Finance users.')
 
     @api.constrains('mobikey_sm_discount_limit', 'mobikey_gm_discount_limit',
                     'mobikey_minimum_margin')
@@ -52,43 +71,56 @@ class Company(models.Model):
                     'The Sales Manager discount limit cannot exceed the Country GM discount limit.'
                 ))
 
-    @api.constrains('mobikey_trade_in_approver_ids')
-    def _check_trade_in_approvers(self):
+    @api.constrains(*APPROVER_ASSIGNMENT_FIELDS)
+    def _check_assigned_approvers(self):
         for company in self:
-            invalid = company.mobikey_trade_in_approver_ids.filtered(
-                lambda user: not user.active or user.share or company not in user.company_ids
-            )
-            if invalid:
-                raise ValidationError(_(
-                    'Trade-in approvers must be active internal users with access to this company: %s',
-                    ', '.join(invalid.mapped('name')),
-                ))
+            for field_name in APPROVER_ASSIGNMENT_FIELDS:
+                invalid = company.with_context(active_test=False)[field_name].filtered(
+                    lambda user: not user.active or user.share or company not in user.company_ids
+                )
+                if invalid:
+                    raise ValidationError(_(
+                        '%(field)s must contain active internal users with access to %(company)s: '
+                        '%(users)s',
+                        field=company._fields[field_name].string,
+                        company=company.display_name,
+                        users=', '.join(invalid.mapped('name')),
+                    ))
 
-    def _ensure_trade_in_approver_access(self):
-        """A direct company assignment also grants the minimum approval-menu access."""
+    def _ensure_assigned_approver_access(self):
+        """Named assignments grant only the minimum approval-review access."""
         group = self.env.ref('mobikey_sale_approvals.group_approver', raise_if_not_found=False)
         if group:
-            self.sudo().mapped('mobikey_trade_in_approver_ids').write({
+            users = self.env['res.users']
+            for field_name in APPROVER_ASSIGNMENT_FIELDS:
+                users |= self.sudo().mapped(field_name)
+            users.write({
                 'group_ids': [Command.link(group.id)],
             })
 
     @api.model_create_multi
     def create(self, vals_list):
         companies = super().create(vals_list)
-        companies._ensure_trade_in_approver_access()
+        companies._ensure_assigned_approver_access()
         return companies
 
     def write(self, values):
         result = super().write(values)
-        if 'mobikey_trade_in_approver_ids' in values:
-            self._ensure_trade_in_approver_access()
+        if set(APPROVER_ASSIGNMENT_FIELDS).intersection(values):
+            self._ensure_assigned_approver_access()
         return result
+
+    def _eligible_internal_approvers(self, users):
+        self.ensure_one()
+        return users.filtered(
+            lambda user: user.active and not user.share and self in user.company_ids
+        )
 
     def _mobikey_approvers(self, role):
         self.ensure_one()
         if role == 'trade_in_pool':
-            return self.sudo().mobikey_trade_in_approver_ids.filtered(
-                lambda user: user.active and not user.share and self in user.company_ids
+            return self._eligible_internal_approvers(
+                self.sudo().mobikey_trade_in_approver_ids
             )
         roles = role.split('|')
         users = self.env['res.users']
@@ -99,13 +131,9 @@ class Company(models.Model):
             'finance': 'mobikey_crm.group_mobikey_finance',
         }
         for key in roles:
-            assigned = self.sudo()[f'mobikey_{key}_ids']
-            eligible_assigned = assigned.filtered(
-                lambda user: user.active and not user.share and self in user.company_ids
-                and user.has_group(groups[key])
-            )
-            if eligible_assigned:
-                users |= eligible_assigned
+            assigned = self.sudo().with_context(active_test=False)[f'mobikey_{key}_ids']
+            if assigned:
+                users |= self._eligible_internal_approvers(assigned)
                 continue
             role_group = self.env.ref(groups[key])
             users |= self.env['res.users'].sudo().search([
