@@ -8,8 +8,8 @@ ref = "13b2781978b0edad0df0800404276919b767e32b"
 [server]
 port = 8074
 [tests]
-modules = ["mobikey_sale_approvals", "mobikey_sale_documents", "synconics_bi_dashboard"]
-tags = ["/mobikey_sale_approvals", "/mobikey_sale_documents", "/synconics_bi_dashboard"]
+modules = ["mobikey_crm", "mobikey_sale_approvals", "mobikey_sale_documents", "synconics_bi_dashboard"]
+tags = ["/mobikey_crm", "/mobikey_sale_approvals", "/mobikey_sale_documents", "/synconics_bi_dashboard"]
 without_demo = true
 [build]
 requirements = ["requirements.txt"]
