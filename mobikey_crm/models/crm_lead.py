@@ -4,7 +4,7 @@ Stage movement, Won/Lost and quotation creation use native Odoo behaviour.
 """
 from datetime import timedelta
 from odoo import api, fields, models, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import UserError, ValidationError
 
 PURCHASE_TIMEFRAME_DAYS = {'immediate': 30, 'short': 60, 'medium': 120, 'long': 180}
 APPROVAL_STATUS = [('not_required', 'Not Required'), ('pending', 'Pending'),
@@ -191,14 +191,47 @@ class CrmLead(models.Model):
             values['financing_required'] = True
         return values
 
+    def _check_confirmed_order_before_won(self, stage, target_type=None):
+        """Require a linked confirmed quotation before entering a Won stage."""
+        if not stage.is_won:
+            return
+        for lead in self:
+            if (target_type or lead.type) != 'opportunity':
+                continue
+            confirmed_orders = lead.sudo().order_ids.filtered_domain(
+                lead._get_lead_sale_order_domain()
+            )
+            if not confirmed_orders:
+                raise UserError(_(
+                    'This opportunity cannot be marked Won because it has no confirmed quotation. '
+                    'Confirm at least one linked quotation first.'
+                ))
+
     @api.model_create_multi
     def create(self, vals_list):
+        default_type = self.default_get(['type']).get('type')
+        creating_won_opportunity = any(
+            vals.get('type', default_type) == 'opportunity'
+            and self.env['crm.stage'].browse(vals['stage_id']).is_won
+            for vals in vals_list
+            if vals.get('stage_id')
+        )
+        if creating_won_opportunity:
+            raise UserError(_(
+                'An opportunity cannot be created as Won because it cannot yet have a confirmed '
+                'quotation. Create the opportunity and confirm a linked quotation first.'
+            ))
         empty = self.new({})
         return super().create([
             empty._mobikey_financing_values(vals, creating=True) for vals in vals_list
         ])
 
     def write(self, vals):
+        if vals.get('stage_id'):
+            self._check_confirmed_order_before_won(
+                self.env['crm.stage'].browse(vals['stage_id']),
+                target_type=vals.get('type'),
+            )
         result = True
         for lead in self:
             result = super(CrmLead, lead).write(lead._mobikey_financing_values(vals)) and result
