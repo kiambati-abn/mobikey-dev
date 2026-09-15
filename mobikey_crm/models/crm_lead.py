@@ -193,7 +193,7 @@ class CrmLead(models.Model):
 
     def _check_confirmed_order_before_won(self, stage, target_type=None):
         """Require a linked confirmed quotation before entering a Won stage."""
-        if not stage.is_won:
+        if self._is_trusted_demo_load() or not stage.is_won:
             return
         for lead in self:
             if (target_type or lead.type) != 'opportunity':
@@ -207,6 +207,10 @@ class CrmLead(models.Model):
                     'Confirm at least one linked quotation first.'
                 ))
 
+    def _is_trusted_demo_load(self):
+        """Allow Odoo's own demo records to exercise their native CRM workflow."""
+        return self.env.su and self.env.context.get('install_demo')
+
     @api.model_create_multi
     def create(self, vals_list):
         default_type = self.default_get(['type']).get('type')
@@ -216,7 +220,7 @@ class CrmLead(models.Model):
             for vals in vals_list
             if vals.get('stage_id')
         )
-        if creating_won_opportunity:
+        if creating_won_opportunity and not self._is_trusted_demo_load():
             raise UserError(_(
                 'An opportunity cannot be created as Won because it cannot yet have a confirmed '
                 'quotation. Create the opportunity and confirm a linked quotation first.'
