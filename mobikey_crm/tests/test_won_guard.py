@@ -1,6 +1,6 @@
 from odoo import Command
 from odoo.exceptions import UserError
-from odoo.tests import TransactionCase, tagged
+from odoo.tests import TransactionCase, new_test_user, tagged
 
 
 @tagged('post_install', '-at_install')
@@ -18,6 +18,11 @@ class TestOpportunityWonGuard(TransactionCase):
             'name': 'Won Guard Stage',
             'is_won': True,
         })
+        cls.salesperson = new_test_user(
+            cls.env,
+            login='won.guard.salesperson',
+            groups='sales_team.group_sale_salesman',
+        )
 
     def _lead(self, name='Won Guard Opportunity'):
         return self.env['crm.lead'].create({
@@ -82,5 +87,22 @@ class TestOpportunityWonGuard(TransactionCase):
             self.env['crm.lead'].create({
                 'name': 'Direct Won Opportunity',
                 'type': 'opportunity',
+                'stage_id': self.won_stage.id,
+            })
+
+    def test_trusted_demo_load_can_mark_opportunity_won(self):
+        lead = self._lead()
+
+        lead.with_context(install_demo=True).action_set_won()
+
+        self.assertEqual(lead.probability, 100)
+        self.assertTrue(lead.stage_id.is_won)
+
+    def test_normal_user_cannot_spoof_demo_load_context(self):
+        lead = self._lead()
+        lead.user_id = self.salesperson
+
+        with self.assertRaisesRegex(UserError, 'no confirmed quotation'):
+            lead.with_user(self.salesperson).with_context(install_demo=True).write({
                 'stage_id': self.won_stage.id,
             })
