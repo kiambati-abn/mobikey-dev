@@ -8,3 +8,5 @@ from . import res_config_settings
 from . import product_template
 from . import sale_order_line
 from . import res_users
+from . import access_policy
+from . import deal_type

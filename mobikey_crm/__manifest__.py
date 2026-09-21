@@ -1,5 +1,5 @@
 {'name': 'Mobikey CRM',
- 'version': '19.0.2.4.1',
+ 'version': '19.0.2.5.0',
  'category': 'Sales/CRM',
  'summary': 'Vehicle sales CRM pipeline for Mobikey (KE / UG / TZ)',
  'description': 'CRM qualification with native stage movement. Commercial workflow lives on Sales '
@@ -16,6 +16,9 @@
           'data/trade_in_email_template.xml',
           'security/groups.xml',
           'security/ir.model.access.csv',
+          'data/access_policy_and_deal_types.xml',
+          'security/access_policy.xml',
+          'views/access_policy_views.xml',
           'views/crm_lead_views.xml',
           'views/crm_stage_views.xml',
           'views/product_product_view.xml',

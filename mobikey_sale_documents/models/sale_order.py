@@ -1,3 +1,6 @@
+from lxml import html as lxml_html
+from markupsafe import Markup
+
 from odoo import api, fields, models, _
 from odoo.exceptions import UserError, ValidationError
 from odoo.fields import Command
@@ -5,6 +8,56 @@ from odoo.fields import Command
 
 class SaleOrder(models.Model):
     _inherit = 'sale.order'
+
+    def _get_mobikey_formatted_terms(self):
+        """Normalize presentation on a copy; never rewrite the stored legal text."""
+        self.ensure_one()
+        if not self.note:
+            return Markup('')
+        root = lxml_html.fragment_fromstring(str(self.note), create_parent='div')
+        palette = self.mobikey_document_template_id._get_mobikey_palette()
+        headings = {'h1', 'h2', 'h3', 'h4', 'h5', 'h6'}
+        typography = {'font', 'font-family', 'font-size', 'line-height', 'color'}
+        for node in root.iter():
+            if not isinstance(node.tag, str):
+                continue
+            if node.tag == 'font':
+                node.tag = 'span'
+                for attribute in ('face', 'size', 'color'):
+                    node.attrib.pop(attribute, None)
+            styles = [item.strip() for item in node.get('style', '').split(';')
+                      if ':' in item and item.split(':', 1)[0].strip().lower() not in typography]
+            is_heading = node.tag in headings or any(parent.tag in headings for parent in node.iterancestors())
+            color = palette['primary'] if is_heading else palette['body']
+            styles.extend([
+                'font-family: Arial, Helvetica, sans-serif !important',
+                'font-size: 10pt !important',
+                'line-height: 1.3 !important',
+                f'color: {color} !important',
+            ])
+            if is_heading:
+                styles.append('font-weight: bold !important')
+            if node.tag in headings:
+                styles.extend(['margin: 2mm 0 !important', 'page-break-after: avoid !important'])
+            node.set('style', '; '.join(styles))
+        # wkhtmltopdf can ignore page-break-after on rich-text headings. Keep a
+        # short opening paragraph with its heading, without making long clauses
+        # or tables unbreakable and potentially taller than the printable page.
+        for heading in list(root.iter()):
+            paragraph = heading.getnext()
+            if (heading.tag in headings and paragraph is not None and paragraph.tag == 'p'
+                    and len(paragraph.text_content()) <= 1200
+                    and not paragraph.xpath('.//img | .//table | .//br')):
+                group = lxml_html.Element('div', {
+                    'class': 'mobikey-terms-clause-lead',
+                    'style': 'display: inline-block; width: 100%; vertical-align: top; '
+                             'page-break-inside: avoid !important; break-inside: avoid-page !important;',
+                })
+                heading.addprevious(group)
+                group.extend([heading, paragraph])
+        # note is an Odoo-sanitized HTML field; transformations add only fixed CSS
+        # and validated palette colors. Markup preserves its existing HTML structure.
+        return Markup(lxml_html.tostring(root, encoding='unicode'))
 
     mobikey_document_template_id = fields.Many2one(
         'mobikey.document.template',

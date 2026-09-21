@@ -83,7 +83,7 @@ class SaleApproval(models.Model):
 
     @api.depends('category', 'financial_snapshot')
     def _compute_preview_summary(self):
-        deal_labels = dict(self.env['sale.order']._fields['deal_type'].selection)
+        deal_labels = dict(self.env['sale.order']._fields['deal_type']._description_selection(self.env))
         for approval in self:
             preview = (approval.sudo().financial_snapshot or {}).get('preview', {})
             currency = preview.get('currency') or ''
