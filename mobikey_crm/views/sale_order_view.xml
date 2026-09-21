@@ -7,8 +7,12 @@
     <field name="arch" type="xml">
       <xpath expr="//field[@name='sale_order_template_id']" position="after">
         <field name="deal_type" />
+        <field name="financing_required" />
         <field name="customer_type" />
         <field name="vehicle_condition" />
+      </xpath>
+      <xpath expr="//field[@name='payment_term_id']" position="attributes">
+        <attribute name="domain">[('financing_required', '=', True)] if financing_required else []</attribute>
       </xpath>
     </field>
   </record>

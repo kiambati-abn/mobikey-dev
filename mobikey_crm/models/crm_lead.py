@@ -3,8 +3,8 @@
 Stage movement, Won/Lost and quotation creation use native Odoo behaviour.
 """
 from datetime import timedelta
-from odoo import fields, models, _
-from odoo.exceptions import ValidationError
+from odoo import api, fields, models, _
+from odoo.exceptions import UserError, ValidationError
 
 PURCHASE_TIMEFRAME_DAYS = {'immediate': 30, 'short': 60, 'medium': 120, 'long': 180}
 APPROVAL_STATUS = [('not_required', 'Not Required'), ('pending', 'Pending'),
@@ -17,8 +17,17 @@ class CrmLead(models.Model):
 
     preferred_language = fields.Selection(
         selection=[('en', 'English'), ('sw', 'Swahili')],
-        string="Preferred Language",
+        string="Legacy Preferred Language",
         default='en',
+        copy=False,
+        help="Historical compatibility field. Use Preferred Language instead.",
+    )
+    preferred_language_id = fields.Many2one(
+        'mobikey.preferred.language',
+        string="Preferred Language",
+        default=lambda self: self.env.ref(
+            'mobikey_crm.preferred_language_english', raise_if_not_found=False
+        ),
         tracking=True,
     )
 
@@ -72,7 +81,7 @@ class CrmLead(models.Model):
 
         store=True,
         tracking=True,
-        help="Automatically set when the selected payment term has 'Financing Required' enabled.",
+        help="Indicates that quotations for this opportunity should use financing payment terms.",
     )
 
     trade_in = fields.Boolean(string="Trade-In Available", tracking=True)
@@ -86,7 +95,9 @@ class CrmLead(models.Model):
 
     payment_terms_type = fields.Many2one(
         'account.payment.term',
-        string="Payment Terms",
+        string="Legacy Payment Terms",
+        copy=False,
+        help="Historical compatibility field. Set payment terms on each quotation.",
     )
 
     expected_delivery_date = fields.Date(string="Expected Delivery Date")
@@ -99,7 +110,28 @@ class CrmLead(models.Model):
 
     referral_name = fields.Char(string="Referral Name")
 
-    walkin_location = fields.Many2one(comodel_name="stock.location", string="Walk-in Location / Branch")
+    walkin_location = fields.Many2one(
+        comodel_name="stock.location",
+        string="Legacy Walk-in Location",
+        copy=False,
+        help="Historical compatibility field. Use Walk-in Location / Branch instead.",
+    )
+    walkin_company_id = fields.Many2one(
+        'res.company',
+        string="Walk-in Location / Branch",
+        tracking=True,
+        help="Company or branch where the customer walked in.",
+    )
+    available_walkin_company_ids = fields.Many2many(
+        'res.company',
+        compute='_compute_available_walkin_company_ids',
+    )
+
+    @api.depends_context('uid')
+    def _compute_available_walkin_company_ids(self):
+        available = self.env.user.company_ids
+        for lead in self:
+            lead.available_walkin_company_ids = available
 
     lead_score = fields.Integer(string="Lead Score", default=0, readonly=True)
 
@@ -147,6 +179,72 @@ class CrmLead(models.Model):
             ('lease', 'Lease'),
             ('fleet', 'Fleet'),
         ], string="Deal Type")
+
+    def _mobikey_financing_values(self, vals, creating=False):
+        self.ensure_one()
+        values = dict(vals)
+        policy_changed = creating or bool({'deal_type', 'financing_required'} & values.keys())
+        if not policy_changed:
+            return values
+        deal_type = values.get('deal_type', self.deal_type)
+        if deal_type == 'financing':
+            values['financing_required'] = True
+        return values
+
+    def _check_confirmed_order_before_won(self, stage, target_type=None):
+        """Require a linked confirmed quotation before entering a Won stage."""
+        if self._is_trusted_demo_load() or not stage.is_won:
+            return
+        for lead in self:
+            if (target_type or lead.type) != 'opportunity':
+                continue
+            confirmed_orders = lead.sudo().order_ids.filtered_domain(
+                lead._get_lead_sale_order_domain()
+            )
+            if not confirmed_orders:
+                raise UserError(_(
+                    'This opportunity cannot be marked Won because it has no confirmed quotation. '
+                    'Confirm at least one linked quotation first.'
+                ))
+
+    def _is_trusted_demo_load(self):
+        """Allow Odoo's own demo records to exercise their native CRM workflow."""
+        return self.env.su and self.env.context.get('install_demo')
+
+    @api.model_create_multi
+    def create(self, vals_list):
+        default_type = self.default_get(['type']).get('type')
+        creating_won_opportunity = any(
+            vals.get('type', default_type) == 'opportunity'
+            and self.env['crm.stage'].browse(vals['stage_id']).is_won
+            for vals in vals_list
+            if vals.get('stage_id')
+        )
+        if creating_won_opportunity and not self._is_trusted_demo_load():
+            raise UserError(_(
+                'An opportunity cannot be created as Won because it cannot yet have a confirmed '
+                'quotation. Create the opportunity and confirm a linked quotation first.'
+            ))
+        empty = self.new({})
+        return super().create([
+            empty._mobikey_financing_values(vals, creating=True) for vals in vals_list
+        ])
+
+    def write(self, vals):
+        if vals.get('stage_id'):
+            self._check_confirmed_order_before_won(
+                self.env['crm.stage'].browse(vals['stage_id']),
+                target_type=vals.get('type'),
+            )
+        result = True
+        for lead in self:
+            result = super(CrmLead, lead).write(lead._mobikey_financing_values(vals)) and result
+        return result
+
+    @api.onchange('deal_type')
+    def _onchange_mobikey_deal_type(self):
+        if self.deal_type == 'financing':
+            self.financing_required = True
 
     bank_id = fields.Many2one('res.bank', string="Bank")
 
@@ -394,6 +492,7 @@ class CrmLead(models.Model):
             'default_vehicle_condition': self.vehicle_condition,
             'default_customer_type': self.customer_type.id,
             'default_deal_type': self.deal_type,
+            'default_financing_required': self.financing_required,
 
         })
 

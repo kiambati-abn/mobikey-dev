@@ -1,4 +1,5 @@
-from odoo import fields, models
+from odoo import api, fields, models, _
+from odoo.exceptions import ValidationError
 
 FINANCIAL = 'mobikey_sale_approvals.group_financial_visibility'
 
@@ -7,6 +8,19 @@ class ProductTemplate(models.Model):
     _inherit = 'product.template'
     standard_price = fields.Float(groups=FINANCIAL)
     target_margin = fields.Float(groups=FINANCIAL)
+    mobikey_minimum_margin = fields.Float(
+        string='Minimum acceptable margin (%)',
+        company_dependent=True,
+        default=0.0,
+        groups=FINANCIAL,
+        help='A positive value triggers Country GM approval when this product line falls below it. Zero disables the product-level rule.',
+    )
+
+    @api.constrains('mobikey_minimum_margin')
+    def _check_mobikey_minimum_margin(self):
+        for product in self:
+            if not 0 <= product.mobikey_minimum_margin < 100:
+                raise ValidationError(_('Product minimum margin must be between 0% and less than 100%.'))
 
 
 class ProductProduct(models.Model):

@@ -49,8 +49,11 @@ class TestQuotationWorkflow(TransactionCase):
         self.product.target_margin = 60
         order = self.quote()
         self.assertNotIn('margin', order._approval_requirements())
+        self.product.product_tmpl_id.mobikey_minimum_margin = 45
+        self.assertEqual(order._approval_requirements(), {'margin': 'gm'})
         self.env.company.mobikey_minimum_margin = 45
         self.assertEqual(order._approval_requirements()['margin'], 'gm')
+        self.assertEqual(order._approval_requirements()['margin_hq'], 'hq')
         order.order_line.price_unit = 500
         self.assertEqual(order._approval_requirements()['margin'], 'gm')
         with self.assertRaises(ValidationError):
@@ -60,6 +63,44 @@ class TestQuotationWorkflow(TransactionCase):
             })
         with self.assertRaises(ValidationError):
             self.env.company.mobikey_minimum_margin = 101
+        with self.assertRaises(ValidationError):
+            self.product.product_tmpl_id.mobikey_minimum_margin = 100
+
+    def test_product_margin_is_company_specific_and_zero_disables_it(self):
+        template = self.product.product_tmpl_id
+        template.mobikey_minimum_margin = 45
+        order = self.quote()
+        self.assertEqual(order._approval_requirements(), {'margin': 'gm'})
+
+        template.mobikey_minimum_margin = 0
+        self.assertNotIn('margin', order._approval_requirements())
+
+        other_company = self.env['res.company'].create({'name': 'Product threshold company'})
+        template.with_company(other_company).mobikey_minimum_margin = 55
+        self.assertEqual(template.mobikey_minimum_margin, 0)
+        self.assertEqual(template.with_company(other_company).mobikey_minimum_margin, 55)
+
+    def test_overall_margin_routes_gm_then_hq(self):
+        self.env.company.mobikey_minimum_margin = 45
+        order = self.quote()
+        order.action_submit_approvals()
+        approvals = order.sudo().approval_ids
+        gm = approvals.filtered(lambda item: item.category == 'margin')
+        hq = approvals.filtered(lambda item: item.category == 'margin_hq')
+        self.assertEqual(gm.sequence, 1)
+        self.assertEqual(hq.sequence, 2)
+        self.assertEqual(hq.dependency_ids, gm)
+        self.assertTrue(gm.notified_at)
+        self.assertFalse(hq.notified_at)
+        self.assertEqual(hq.workflow_state, 'queued')
+        self.assertIn('Overall quotation margin: 40.00%', gm.margin_preview)
+
+        gm.with_user(self.gm).action_approve()
+        self.assertTrue(hq.notified_at)
+        self.assertEqual(hq.workflow_state, 'active')
+        self.assertEqual(len(hq.activity_ids), 1)
+        hq.with_user(self.hq).action_approve()
+        self.assertEqual(order.approval_status, 'ready')
 
     def test_native_stages_do_not_cancel_pending_quote(self):
         lead = self.env['crm.lead'].create({'name': 'Opportunity', 'type': 'opportunity', 'user_id': self.sales.id, 'company_id': self.env.company.id})
@@ -70,7 +111,7 @@ class TestQuotationWorkflow(TransactionCase):
         self.assertEqual(order.state, 'draft')
         self.assertEqual(order.approval_status, 'pending')
 
-    def test_revenue_primary_alternatives_and_cancellation(self):
+    def test_revenue_sums_active_quotations_and_cancellation(self):
         lead = self.env['crm.lead'].create({'name': 'Forecast', 'type': 'opportunity', 'user_id': self.sales.id, 'company_id': self.env.company.id,
                                           'expected_revenue': 500})
         first = self.quote(opportunity_id=lead.id)
@@ -78,11 +119,14 @@ class TestQuotationWorkflow(TransactionCase):
         self.assertEqual(lead.expected_revenue, first.amount_total)
         second = self.quote(opportunity_id=lead.id)
         second.order_line.price_unit = 5000
-        self.assertEqual(lead.expected_revenue, 1000)
+        self.assertEqual(lead.expected_revenue, 6000)
         first.order_line.price_unit = 900
-        self.assertEqual(lead.expected_revenue, 900)
+        self.assertEqual(lead.expected_revenue, 5900)
         first.action_cancel()
         self.assertFalse(lead.primary_quotation_id)
+        self.assertEqual(lead.expected_revenue, 5000)
+        self.assertEqual(lead.revenue_quotation_count, 1)
+        second.action_cancel()
         self.assertEqual(lead.expected_revenue, 0)
 
     def test_revision_permissions_and_notifications(self):
@@ -120,7 +164,9 @@ class TestQuotationWorkflow(TransactionCase):
         order = self.quote()
         for record, field in [(self.product, 'standard_price'), (self.product.product_tmpl_id, 'standard_price'),
                               (self.product, 'avg_cost'), (self.product, 'total_value'),
-                              (self.product, 'target_margin'), (order, 'margin'),
+                              (self.product, 'target_margin'),
+                              (self.product.product_tmpl_id, 'mobikey_minimum_margin'),
+                              (order, 'margin'),
                               (order.order_line, 'purchase_price'), (order.order_line, 'margin_percent')]:
             with self.assertRaises(AccessError):
                 record.with_user(self.sales).read([field])
@@ -203,6 +249,36 @@ class TestQuotationWorkflow(TransactionCase):
         with self.assertRaisesRegex(UserError, 'Trade-in approvers'):
             order.action_submit_approvals()
 
+    def test_deal_type_and_financing_terms_stay_consistent(self):
+        cash_term = self.env['account.payment.term'].create({'name': 'Cash term'})
+        finance_term = self.env['account.payment.term'].create({
+            'name': 'Financing term', 'financing_required': True,
+        })
+        lead = self.env['crm.lead'].create({
+            'name': 'Fleet finance', 'type': 'opportunity', 'user_id': self.sales.id,
+            'company_id': self.env.company.id, 'deal_type': 'fleet',
+            'financing_required': True, 'payment_terms_type': finance_term.id,
+        })
+        quote_context = lead._prepare_opportunity_quotation_context()
+        self.assertNotIn('default_payment_term_id', quote_context)
+        order = self.quote(
+            opportunity_id=lead.id, deal_type='fleet', financing_required=True,
+            payment_term_id=finance_term.id,
+        )
+        self.assertEqual(order.deal_type, 'fleet')
+        self.assertTrue(order.financing_required)
+        self.assertIn('financing', order._approval_requirements())
+
+        direct = self.quote(payment_term_id=finance_term.id, deal_type='cash')
+        self.assertEqual(direct.deal_type, 'financing')
+        self.assertTrue(direct.financing_required)
+
+        with self.assertRaises(ValidationError):
+            order.payment_term_id = cash_term
+
+        lead.write({'deal_type': 'financing'})
+        self.assertTrue(lead.financing_required)
+
     def test_trade_in_approvers_are_selected_individually(self):
         reviewer = new_test_user(self.env, login='workflow.trade.in', groups='base.group_user')
         self.env.company.mobikey_trade_in_approver_ids = [Command.set(reviewer.ids)]
@@ -213,6 +289,76 @@ class TestQuotationWorkflow(TransactionCase):
         self.assertEqual(approval.assigned_user_ids, reviewer)
         approval.with_user(reviewer).action_approve()
         self.assertEqual(approval.status, 'approved')
+
+    def test_named_gm_can_approve_financing_without_finance_role(self):
+        self.assertFalse(self.gm.has_group('mobikey_crm.group_mobikey_finance'))
+        self.env.company.mobikey_finance_ids = [Command.set(self.gm.ids)]
+        term = self.env['account.payment.term'].create({
+            'name': 'GM finance approval term', 'financing_required': True,
+        })
+        order = self.quote(payment_term_id=term.id)
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids.filtered(lambda item: item.category == 'financing')
+        self.assertEqual(approval.assigned_user_ids, self.gm)
+        approval.with_user(self.gm).action_approve()
+        self.assertEqual(approval.status, 'approved')
+
+    def test_named_finance_approver_gets_minimum_access_not_financial_visibility(self):
+        reviewer = new_test_user(self.env, login='workflow.named.finance', groups='base.group_user')
+        self.env.company.mobikey_finance_ids = [Command.set(reviewer.ids)]
+        self.assertTrue(reviewer.has_group('mobikey_sale_approvals.group_approver'))
+        self.assertFalse(reviewer.has_group('mobikey_sale_approvals.group_financial_visibility'))
+        term = self.env['account.payment.term'].create({
+            'name': 'Named finance approval term', 'financing_required': True,
+        })
+        order = self.quote(payment_term_id=term.id)
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids.filtered(lambda item: item.category == 'financing')
+        approval.with_user(reviewer).action_approve()
+        self.assertEqual(approval.status, 'approved')
+
+    def test_explicit_unavailable_approver_does_not_silently_fall_back(self):
+        reviewer = new_test_user(self.env, login='workflow.unavailable.finance', groups='base.group_user')
+        self.env.company.mobikey_finance_ids = [Command.set(reviewer.ids)]
+        reviewer.active = False
+        self.assertFalse(self.env.company._mobikey_approvers('finance'))
+        term = self.env['account.payment.term'].create({
+            'name': 'Unavailable finance approval term', 'financing_required': True,
+        })
+        with self.assertRaisesRegex(UserError, 'financing'):
+            self.quote(payment_term_id=term.id).action_submit_approvals()
+
+    def test_pending_approval_keeps_its_submitted_assignee(self):
+        self.env.company.mobikey_finance_ids = [Command.set(self.gm.ids)]
+        term = self.env['account.payment.term'].create({
+            'name': 'Frozen finance assignee term', 'financing_required': True,
+        })
+        order = self.quote(payment_term_id=term.id)
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids.filtered(lambda item: item.category == 'financing')
+        self.env.company.mobikey_finance_ids = [Command.set(self.finance.ids)]
+        self.assertEqual(approval.assigned_user_ids, self.gm)
+        approval.with_user(self.gm).action_approve()
+        self.assertEqual(approval.status, 'approved')
+
+    def test_assignment_rejects_user_without_company_access(self):
+        other_company = self.env['res.company'].create({'name': 'Restricted approver company'})
+        reviewer = new_test_user(self.env, login='workflow.other.company', groups='base.group_user')
+        with self.assertRaisesRegex(ValidationError, 'Assigned Finance approvers'):
+            other_company.mobikey_finance_ids = [Command.set(reviewer.ids)]
+
+    def test_finance_role_is_independent_of_commercial_role(self):
+        self.gm.write({'group_ids': [Command.link(
+            self.env.ref('mobikey_crm.group_mobikey_finance').id
+        )]})
+        self.assertTrue(self.gm.has_group('mobikey_crm.group_mobikey_country_gm'))
+        self.assertTrue(self.gm.has_group('mobikey_crm.group_mobikey_finance'))
+
+    def test_country_director_role_is_removed_and_hq_inherits_gm(self):
+        self.assertFalse(self.env.ref(
+            'mobikey_crm.group_mobikey_country_director', raise_if_not_found=False
+        ))
+        self.assertTrue(self.hq.has_group('mobikey_crm.group_mobikey_country_gm'))
 
     def test_submitted_legacy_trade_in_keeps_original_authority(self):
         order = self.quote(trade_in=True, trade_in_valuation=500)
@@ -279,9 +425,28 @@ class TestQuotationWorkflow(TransactionCase):
             'name': 'Language preference',
             'type': 'opportunity',
         })
-        lead.preferred_language = 'sw'
-        self.assertEqual(lead.preferred_language, 'sw')
-        self.assertTrue(lead._fields['preferred_language'].tracking)
+        swahili = self.env.ref('mobikey_crm.preferred_language_swahili')
+        french = self.env['mobikey.preferred.language'].with_user(self.sales).create({
+            'name': 'French', 'code': 'fr',
+        })
+        lead.preferred_language_id = swahili
+        self.assertEqual(lead.preferred_language_id, swahili)
+        lead.preferred_language_id = french
+        self.assertEqual(lead.preferred_language_id, french)
+        self.assertTrue(lead._fields['preferred_language_id'].tracking)
+
+    def test_walkin_branch_uses_accessible_companies(self):
+        branch = self.env['res.company'].create({
+            'name': 'Walk-in Branch', 'parent_id': self.env.company.id,
+        })
+        self.env.user.company_ids = [Command.link(branch.id)]
+        lead = self.env['crm.lead'].create({
+            'name': 'Branch visit', 'type': 'opportunity', 'company_id': self.env.company.id,
+            'user_id': self.sales.id, 'walkin_company_id': branch.id,
+        })
+        self.assertEqual(lead.walkin_company_id, branch)
+        self.assertIn(branch, lead.available_walkin_company_ids)
+        self.assertEqual(lead._fields['walkin_company_id'].comodel_name, 'res.company')
 
     def test_repeated_user_copies_receive_unique_logins(self):
         source = new_test_user(self.env, login='copy.source@example.invalid', groups='base.group_user')
@@ -348,6 +513,7 @@ class TestQuotationWorkflow(TransactionCase):
 
     def test_company_authority_is_checked(self):
         other_company = self.env['res.company'].create({'name': 'Other country'})
+        self.hq.company_ids = [Command.link(other_company.id)]
         self.env.company.mobikey_hq_ids = False
         other_company.mobikey_hq_ids = self.hq
         order = self.quote((10,))
@@ -401,7 +567,7 @@ class TestQuotationWorkflow(TransactionCase):
         with self.assertRaises(UserError):
             wizard._action_send_mail()
 
-    def test_revenue_currency_tax_and_primary_switch(self):
+    def test_revenue_currency_tax_and_multiple_quotations(self):
         lead = self.env['crm.lead'].create({'name': 'Currency forecast', 'type': 'opportunity',
             'company_id': self.env.company.id, 'user_id': self.sales.id})
         foreign = self.env.ref('base.EUR')
@@ -419,7 +585,7 @@ class TestQuotationWorkflow(TransactionCase):
         self.assertAlmostEqual(lead.expected_revenue, expected)
         alternative = self.quote(opportunity_id=lead.id)
         lead.primary_quotation_id = alternative
-        self.assertEqual(lead.expected_revenue, alternative.amount_untaxed)
+        self.assertAlmostEqual(lead.expected_revenue, expected + alternative.amount_untaxed)
 
     def test_commission_requires_configured_milestone(self):
         order = self.quote()

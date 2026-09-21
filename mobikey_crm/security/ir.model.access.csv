@@ -10,3 +10,5 @@ access_mobikey_customer_type_user,mobikey.customer.type user,model_mobikey_custo
 access_mobikey_customer_type_manager,mobikey.customer.type manager,model_mobikey_customer_type,base.group_system,1,1,1,1
 access_mobikey_industry_type_user,mobikey.industry.type user,model_mobikey_industry_type,base.group_user,1,1,1,0
 access_mobikey_industry_type_manager,mobikey.industry.type manager,model_mobikey_industry_type,base.group_system,1,1,1,1
+access_mobikey_preferred_language_user,mobikey.preferred.language user,model_mobikey_preferred_language,base.group_user,1,1,1,0
+access_mobikey_preferred_language_manager,mobikey.preferred.language manager,model_mobikey_preferred_language,base.group_system,1,1,1,1
