@@ -1,12 +1,27 @@
 from types import SimpleNamespace
 from unittest.mock import patch
-from odoo.tests import TransactionCase, tagged
+from odoo.tests import TransactionCase, tagged, new_test_user
 from odoo.exceptions import ValidationError
 from odoo.tools import mute_logger
 
 
 @tagged('post_install', '-at_install')
 class TestMetricCorrectness(TransactionCase):
+    def test_crm_totals_follow_configurable_access_policy(self):
+        if 'mobikey.crm.access.policy' not in self.env:
+            self.skipTest('Mobikey CRM is not installed')
+        sales = new_test_user(self.env, login='metrics.sales', groups='sales_team.group_sale_salesman')
+        peer = new_test_user(self.env, login='metrics.peer', groups='sales_team.group_sale_salesman')
+        leads = self.env['crm.lead'].create([
+            {'name': 'Metric own lead', 'user_id': sales.id, 'team_id': False},
+            {'name': 'Metric private lead', 'user_id': peer.id, 'team_id': False},
+        ])
+        chart = self.env['dashboard.chart'].with_user(sales)
+        config = self.config(model='crm.lead', domain=[('id', 'in', leads.ids)])
+        self.assertEqual(chart.get_tile_data(config)['calculated_count'], 1)
+        self.env.ref('mobikey_crm.crm_policy_sales').read_scope = 'all'
+        self.assertEqual(chart.get_tile_data(config)['calculated_count'], 2)
+
     def config(self, **changes):
         values = dict(model='res.partner', measurement_field_id=False, data_type='count', domain=[],
             company=self.env.company.id, date_filter_field=False, date_filter_option=False,

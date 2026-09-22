@@ -599,6 +599,62 @@ class TestQuotationWorkflow(TransactionCase):
         order.sudo()._ensure_commission_approval()
         self.assertEqual(order.sudo().approval_ids, commission)
 
+    def test_snapshot_visibility_tracks_current_assignment(self):
+        leader = new_test_user(self.env, login='forecast.leader', groups='sales_team.group_sale_salesman')
+        replacement = new_test_user(self.env, login='forecast.replacement', groups='sales_team.group_sale_salesman')
+        team = self.env['crm.team'].create({'name': 'Forecast team', 'user_id': leader.id})
+        lead = self.env['crm.lead'].create({'name': 'Private forecast', 'type': 'opportunity',
+            'company_id': self.env.company.id, 'user_id': self.sales.id, 'team_id': team.id,
+            'expected_revenue': 500, 'probability': 40})
+        self.env['mobikey.forecast.snapshot'].sudo()._cron_snapshot()
+        snapshot = self.env['mobikey.forecast.snapshot'].search([('lead_id', '=', lead.id)])
+        self.assertTrue(snapshot.with_user(self.sales).has_access('read'))
+        self.assertTrue(snapshot.with_user(leader).has_access('read'))
+        lead.user_id = replacement
+        self.assertEqual(snapshot.user_id, self.sales)
+        self.assertFalse(snapshot.with_user(self.sales).has_access('read'))
+        self.assertTrue(snapshot.with_user(replacement).has_access('read'))
+        self.sales.write({'group_ids': [Command.link(self.env.ref('sales_team.group_sale_salesman_all_leads').id)]})
+        self.assertFalse(snapshot.with_user(self.sales).has_access('read'))
+        lead.unlink()
+        self.assertFalse(snapshot.with_user(replacement).has_access('read'))
+        self.assertFalse(snapshot.with_user(leader).has_access('read'))
+        manager = new_test_user(self.env, login='forecast.manager', groups='sales_team.group_sale_manager')
+        self.assertTrue(snapshot.with_user(manager).has_access('read'))
+
+    def test_reviewer_can_approve_linked_quote_without_crm_access(self):
+        lead = self.env['crm.lead'].create({'name': 'Private opportunity', 'type': 'opportunity',
+            'user_id': self.sales.id, 'company_id': self.env.company.id})
+        order = self.quote(discounts=(1,), opportunity_id=lead.id)
+        order.action_submit_approvals()
+        self.assertFalse(lead.with_user(self.sm).has_access('read'))
+        self.assertTrue(order.with_user(self.sm).read(['name', 'opportunity_id']))
+        order.sudo().approval_ids.with_user(self.sm).action_approve()
+        self.assertEqual(order.sudo().approval_ids.status, 'approved')
+
+    def test_dynamic_deal_labels_do_not_change_approval_fingerprint(self):
+        deal = self.env['mobikey.deal.type'].create({'name': 'Corporate finance', 'code': 'corporate_finance'})
+        term = self.env['account.payment.term'].create({'name': 'Corporate financed', 'financing_required': True})
+        order = self.quote(deal_type=deal.code, payment_term_id=term.id)
+        order.action_submit_approvals()
+        fingerprint = order.sudo().approval_fingerprint
+        financing = order.sudo().approval_ids.filtered(lambda approval: approval.category == 'financing')
+        self.assertIn('Corporate finance', financing.preview_summary)
+        deal.name = 'Business finance'
+        self.assertEqual(order._commercial_fingerprint(), fingerprint)
+        financing.invalidate_recordset(['preview_summary'])
+        self.assertIn('Business finance', financing.preview_summary)
+
+    def test_deal_option_retained_in_approval_history_cannot_be_deleted(self):
+        option = self.env['mobikey.deal.type'].create({'name': 'Historical', 'code': 'historical'})
+        order = self.quote()
+        self.env['mobikey.sale.approval'].sudo().create({
+            'order_id': order.id, 'revision': 1, 'category': 'financing', 'authority': 'finance',
+            'requested_by': self.sales.id, 'financial_snapshot': {'preview': {'deal_type': option.code}},
+        })
+        with self.assertRaises(ValidationError):
+            option.unlink()
+
     def test_snapshot_is_stable(self):
         lead = self.env['crm.lead'].create({'name': 'Forecast snapshot', 'type': 'opportunity',
             'company_id': self.env.company.id, 'user_id': self.sales.id, 'expected_revenue': 500, 'probability': 40})

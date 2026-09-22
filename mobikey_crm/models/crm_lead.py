@@ -114,13 +114,13 @@ class CrmLead(models.Model):
         comodel_name="stock.location",
         string="Legacy Walk-in Location",
         copy=False,
-        help="Historical compatibility field. Use Walk-in Location / Branch instead.",
+        help="Historical compatibility field; no longer used for new qualification.",
     )
     walkin_company_id = fields.Many2one(
         'res.company',
-        string="Walk-in Location / Branch",
+        string="Legacy Walk-in Location / Branch",
         tracking=True,
-        help="Company or branch where the customer walked in.",
+        help="Historical company or branch mapping retained for compatibility.",
     )
     available_walkin_company_ids = fields.Many2many(
         'res.company',
@@ -173,12 +173,9 @@ class CrmLead(models.Model):
         help="Linked partner (optional). Usually created when converting the lead. You can find a partner by its Name, TIN, Email or Internal Reference.")
 
     deal_type = fields.Selection(
-        selection=[
-            ('cash', 'Cash'),
-            ('financing', 'Financing'),
-            ('lease', 'Lease'),
-            ('fleet', 'Fleet'),
-        ], string="Deal Type")
+        selection=lambda self: self.env['mobikey.deal.type']._selection(),
+        string="Deal Type",
+    )
 
     def _mobikey_financing_values(self, vals, creating=False):
         self.ensure_one()

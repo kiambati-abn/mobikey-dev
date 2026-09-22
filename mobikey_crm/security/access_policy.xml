@@ -1,0 +1,103 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="crm_policy_lead_read" model="ir.rule">
+        <field name="name">CRM policy: lead read</field>
+        <field name="model_id" ref="crm.model_crm_lead" />
+        <field name="domain_force">user._mobikey_crm_domain('read')</field>
+        <field name="perm_read" eval="True" />
+        <field name="perm_write" eval="False" />
+        <field name="perm_create" eval="False" />
+        <field name="perm_unlink" eval="False" />
+    </record>
+    <record id="crm_policy_lead_write" model="ir.rule">
+        <field name="name">CRM policy: lead write</field>
+        <field name="model_id" ref="crm.model_crm_lead" />
+        <field name="domain_force">user._mobikey_crm_domain('write')</field>
+        <field name="perm_read" eval="False" />
+        <field name="perm_write" eval="True" />
+        <field name="perm_create" eval="False" />
+        <field name="perm_unlink" eval="False" />
+    </record>
+    <record id="crm_policy_lead_create" model="ir.rule">
+        <field name="name">CRM policy: lead create</field>
+        <field name="model_id" ref="crm.model_crm_lead" />
+        <field name="domain_force">user._mobikey_crm_domain('create')</field>
+        <field name="perm_read" eval="False" />
+        <field name="perm_write" eval="False" />
+        <field name="perm_create" eval="True" />
+        <field name="perm_unlink" eval="False" />
+    </record>
+    <record id="crm_policy_lead_unlink" model="ir.rule">
+        <field name="name">CRM policy: lead unlink</field>
+        <field name="model_id" ref="crm.model_crm_lead" />
+        <field name="domain_force">user._mobikey_crm_domain('unlink')</field>
+        <field name="perm_read" eval="False" />
+        <field name="perm_write" eval="False" />
+        <field name="perm_create" eval="False" />
+        <field name="perm_unlink" eval="True" />
+    </record>
+    <record id="crm_policy_lead_grant" model="ir.rule">
+        <field name="name">CRM policy-compatible sales grant</field>
+        <field name="model_id" ref="crm.model_crm_lead" />
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman')), (4, ref('base.group_system'))]" />
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
+    <record id="crm_policy_product_line_read" model="ir.rule">
+        <field name="name">CRM policy: product_line read</field>
+        <field name="model_id" ref="model_crm_product_lines" />
+        <field name="domain_force">user._mobikey_crm_related_domain('read')</field>
+        <field name="perm_read" eval="True" />
+        <field name="perm_write" eval="False" />
+        <field name="perm_create" eval="False" />
+        <field name="perm_unlink" eval="False" />
+    </record>
+    <record id="crm_policy_product_line_write" model="ir.rule">
+        <field name="name">CRM policy: product_line write</field>
+        <field name="model_id" ref="model_crm_product_lines" />
+        <field name="domain_force">user._mobikey_crm_related_domain('write')</field>
+        <field name="perm_read" eval="False" />
+        <field name="perm_write" eval="True" />
+        <field name="perm_create" eval="False" />
+        <field name="perm_unlink" eval="False" />
+    </record>
+    <record id="crm_policy_product_line_create" model="ir.rule">
+        <field name="name">CRM policy: product_line create</field>
+        <field name="model_id" ref="model_crm_product_lines" />
+        <field name="domain_force">user._mobikey_crm_related_domain('create')</field>
+        <field name="perm_read" eval="False" />
+        <field name="perm_write" eval="False" />
+        <field name="perm_create" eval="True" />
+        <field name="perm_unlink" eval="False" />
+    </record>
+    <record id="crm_policy_product_line_unlink" model="ir.rule">
+        <field name="name">CRM policy: product_line unlink</field>
+        <field name="model_id" ref="model_crm_product_lines" />
+        <field name="domain_force">user._mobikey_crm_related_domain('unlink')</field>
+        <field name="perm_read" eval="False" />
+        <field name="perm_write" eval="False" />
+        <field name="perm_create" eval="False" />
+        <field name="perm_unlink" eval="True" />
+    </record>
+    <record id="crm_policy_product_line_grant" model="ir.rule">
+        <field name="name">CRM policy-compatible sales grant</field>
+        <field name="model_id" ref="model_crm_product_lines" />
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman')), (4, ref('base.group_system'))]" />
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
+    <record id="crm_product_line_company" model="ir.rule">
+        <field name="name">CRM product line companies</field>
+        <field name="model_id" ref="model_crm_product_lines" />
+        <field name="domain_force">[('lead_id.company_id', 'in', company_ids + [False])]</field>
+    </record>
+    <record id="crm_activity_policy" model="ir.rule">
+        <field name="name">CRM policy: activity analysis</field>
+        <field name="model_id" ref="crm.model_crm_activity_report" />
+        <field name="domain_force">user._mobikey_crm_related_domain('read')</field>
+    </record>
+    <record id="crm_activity_policy_grant" model="ir.rule">
+        <field name="name">CRM policy-compatible activity grant</field>
+        <field name="model_id" ref="crm.model_crm_activity_report" />
+        <field name="groups" eval="[(4, ref('sales_team.group_sale_salesman')), (4, ref('base.group_system'))]" />
+        <field name="domain_force">[(1, '=', 1)]</field>
+    </record>
+</odoo>

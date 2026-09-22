@@ -874,8 +874,8 @@
                      t-attf-style="background: #{primary_color}; color: #{primary_foreground};">
                     5. Terms and Conditions
                 </div>
-                <span t-if="not is_html_empty(doc.note)"
-                      t-field="doc.note"
+                <div t-if="not is_html_empty(doc.note)"
+                      t-out="doc._get_mobikey_formatted_terms()"
                       class="mobikey-terms-content"
                       t-attf-style="#{'text-align:justify;text-justify:inter-word;' if doc.company_id.terms_type != 'html' else ''}"
                       name="order_note"/>

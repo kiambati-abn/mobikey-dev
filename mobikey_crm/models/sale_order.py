@@ -20,12 +20,9 @@ class SaleOrder(models.Model):
     )
 
     deal_type = fields.Selection(
-        selection=[
-            ('cash', 'Cash'),
-            ('financing', 'Financing'),
-            ('lease', 'Lease'),
-            ('fleet', 'Fleet'),
-        ], string="Deal Type")
+        selection=lambda self: self.env['mobikey.deal.type']._selection(),
+        string="Deal Type",
+    )
     financing_required = fields.Boolean(
         string='Financing Required',
         tracking=True,

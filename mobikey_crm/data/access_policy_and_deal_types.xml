@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+    <record id="deal_type_cash" model="mobikey.deal.type">
+        <field name="name">Cash</field>
+        <field name="code">cash</field>
+        <field name="sequence">10</field>
+    </record>
+    <record id="deal_type_financing" model="mobikey.deal.type">
+        <field name="name">Financing</field>
+        <field name="code">financing</field>
+        <field name="sequence">20</field>
+    </record>
+    <record id="deal_type_lease" model="mobikey.deal.type">
+        <field name="name">Lease</field>
+        <field name="code">lease</field>
+        <field name="sequence">30</field>
+    </record>
+    <record id="deal_type_fleet" model="mobikey.deal.type">
+        <field name="name">Fleet</field>
+        <field name="code">fleet</field>
+        <field name="sequence">40</field>
+    </record>
+    <record id="crm_policy_sales" model="mobikey.crm.access.policy">
+        <field name="name">Salespeople and team leaders</field>
+        <field name="group_id" ref="sales_team.group_sale_salesman" />
+        <field name="read_scope">led</field>
+        <field name="write_scope">led</field>
+        <field name="create_scope">led</field>
+        <field name="unlink_scope">led</field>
+        <field name="reassign_scope">led</field>
+    </record>
+    <record id="crm_policy_manager" model="mobikey.crm.access.policy">
+        <field name="name">CRM managers</field>
+        <field name="group_id" ref="sales_team.group_sale_manager" />
+        <field name="read_scope">all</field>
+        <field name="write_scope">all</field>
+        <field name="create_scope">all</field>
+        <field name="unlink_scope">all</field>
+        <field name="reassign_scope">all</field>
+    </record>
+</odoo>

@@ -5,6 +5,14 @@ from odoo import Command
 _logger = logging.getLogger(__name__)
 
 
+def retire_legacy_acl(env):
+    """Only this repository-owned, obsolete grant is safe to retire automatically."""
+    acl = env.ref('mobikey_crm.access_sale_order_margin_warning', raise_if_not_found=False)
+    if acl and acl.active:
+        acl.active = False
+        _logger.info('Retired obsolete Mobikey margin-warning ACL ID %s', acl.id)
+
+
 def pre_init_hook(env):
     # Preserve the stored estimate before the new computed field is initialised.
     env.cr.execute('ALTER TABLE crm_lead ADD COLUMN IF NOT EXISTS initial_expected_revenue double precision')
@@ -54,6 +62,4 @@ def post_init_hook(env):
     if ambiguous:
         _logger.warning('Mobikey cutover requires manual quotation selection for opportunity IDs: %s', ambiguous)
     # Retire the over-broad legacy ACL even if it survived a prior partial upgrade.
-    acl = env.ref('mobikey_crm.access_sale_order_margin_warning', raise_if_not_found=False)
-    if acl:
-        acl.active = False
+    retire_legacy_acl(env)

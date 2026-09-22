@@ -578,6 +578,50 @@ class TestMobikeySaleDocuments(TransactionCase):
         self.assertIn('display: inline-block', rendered_html)
         self.assertIn('page-break-inside: avoid !important', rendered_html)
 
+    def test_terms_normalize_pasted_typography_without_changing_content(self):
+        order = self._create_order(note=(
+            '<h2 style="font-family: Georgia; font-size: 28pt; color: red">'
+            '<span style="color: blue">Delivery</span></h2>'
+            '<p style="font-family: Courier; font-size: 22pt; color: red; text-align: justify">'
+            '<strong>Keep bold</strong> and <em>keep emphasis</em> '
+            '<a href="https://example.com/terms">terms link</a></p>'
+            '<ol><li>Clause one</li><li>Clause two</li></ol>'
+            '<table><tbody><tr><td>Keep table</td></tr></tbody></table>'
+        ))
+        original = order.note
+        for scheme, primary in [('mobikey', '#323C48'), ('blue_green', '#305496')]:
+            self.document_template.color_scheme = scheme
+            self.document_template.action_restore_color_scheme_defaults()
+            for report in ('sale.action_report_saleorder', 'sale.action_report_pro_forma_invoice'):
+                payload, _ = self.env['ir.actions.report']._render_qweb_html(report, order.ids)
+                terms = lxml_html.fromstring(payload).xpath("//*[@name='order_note']")[0]
+                self.assertEqual(terms.xpath('.//strong')[0].text, 'Keep bold')
+                self.assertEqual(terms.xpath('.//em')[0].text, 'keep emphasis')
+                self.assertEqual(terms.xpath('.//a')[0].get('href'), 'https://example.com/terms')
+                self.assertEqual(len(terms.xpath('.//ol/li')), 2)
+                self.assertEqual(terms.xpath('.//td')[0].text, 'Keep table')
+                heading = terms.xpath('.//h2/span')[0]
+                self.assertIn(f'color: {primary} !important', heading.get('style'))
+                self.assertIn('font-size: 10pt !important', heading.get('style'))
+                paragraph = terms.xpath('.//p')[0]
+                self.assertIn('font-family: Arial, Helvetica, sans-serif', paragraph.get('style'))
+                self.assertIn('text-align: justify', paragraph.get('style'))
+                self.assertNotIn('Courier', paragraph.get('style'))
+                self.assertEqual(order.note, original)
+
+    def test_terms_keep_short_clause_opening_with_heading(self):
+        long_text = 'Long clause text. ' * 100
+        order = self._create_order(note=(
+            '<h3>Short clause</h3><p>Keep this opening with its heading.</p>'
+            f'<h3>Long clause</h3><p>{long_text}</p>'
+        ))
+        tree = lxml_html.fromstring(str(order._get_mobikey_formatted_terms()))
+        groups = tree.xpath("//div[@class='mobikey-terms-clause-lead']")
+        self.assertEqual(len(groups), 1)
+        self.assertEqual(groups[0].xpath('./h3')[0].text, 'Short clause')
+        self.assertEqual(groups[0].xpath('./p')[0].text, 'Keep this opening with its heading.')
+        self.assertEqual(tree.xpath('./p')[0].text, long_text)
+
     def test_native_terms_override_legacy_terms_and_preserve_html(self):
         quotation_template = self.env['sale.order.template'].create({
             'name': 'Native Terms Template',
