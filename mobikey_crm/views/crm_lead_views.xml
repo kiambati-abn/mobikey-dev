@@ -17,7 +17,8 @@
           <group>
             <field name="purchase_timeframe" />
             <field name="budget_range" />
-            <field name="deal_type" />
+            <field name="deal_type" invisible="1" />
+            <field name="deal_type_id" string="Deal Type" options="{'no_quick_create': True}" />
             <field name="financing_required" readonly="0" />
             <field name="trade_in" />
           </group>

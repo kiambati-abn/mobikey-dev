@@ -1,7 +1,7 @@
 from odoo import Command
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.modules.loading import force_demo
-from odoo.tests import TransactionCase, tagged, new_test_user
+from odoo.tests import Form, TransactionCase, tagged, new_test_user
 from odoo.tools import mute_logger
 
 
@@ -517,6 +517,11 @@ class TestQuotationWorkflow(TransactionCase):
         self.env.company.mobikey_hq_ids = False
         other_company.mobikey_hq_ids = self.hq
         order = self.quote((10,))
+        # An assignment in another company must not fill this company's empty list.
+        with self.assertRaisesRegex(UserError, 'Configure named approvers'):
+            order.action_submit_approvals()
+        self.assertFalse(order.approval_submitted)
+        self.env.company.mobikey_hq_ids = self.hq
         before_order = order.message_ids
         order.action_submit_approvals()
         approval = order.sudo().approval_ids
@@ -683,3 +688,188 @@ class TestQuotationWorkflow(TransactionCase):
         self.assertEqual(queued.state, 'cancel')
         post_init_hook(self.env)
         self.assertEqual(len(order.order_line), 1)
+
+    def test_finance_only_reviewer_has_no_crm_or_quotation_edit_access(self):
+        reviewer = new_test_user(self.env, login='workflow.review.only', groups='base.group_user')
+        self.env.company.mobikey_finance_ids = [Command.set(reviewer.ids)]
+        self.assertFalse(reviewer.has_group('sales_team.group_sale_salesman'))
+        self.assertFalse(reviewer.has_group('mobikey_sale_approvals.group_financial_visibility'))
+        lead = self.env['crm.lead'].create({
+            'name': 'Assigned to finance but no CRM role', 'user_id': reviewer.id,
+            'company_id': self.env.company.id,
+        })
+        team = self.env['crm.team'].create({'name': 'Finance led team', 'user_id': reviewer.id})
+        lead.team_id = team
+        self.assertFalse(lead.with_user(reviewer).has_access('read'))
+        term = self.env['account.payment.term'].create({'name': 'Review-only financing', 'financing_required': True})
+        order = self.quote(payment_term_id=term.id)
+        unrelated = self.quote()
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        reviewed = order.with_user(reviewer)
+        self.assertTrue(reviewed.has_access('read'))
+        self.assertTrue(reviewed.order_line.has_access('read'))
+        # Do not let computations cached during sudo setup mask missing ACLs.
+        self.env.invalidate_all()
+        form = Form(reviewed)
+        self.assertEqual(form.partner_id, self.partner)
+        self.assertEqual(Form(reviewed.order_line).name, reviewed.order_line.name)
+        self.assertFalse(self.env['account.move'].with_user(reviewer).has_access('read'))
+        self.assertFalse(self.env['stock.move'].with_user(reviewer).has_access('read'))
+        self.assertFalse(unrelated.with_user(reviewer).has_access('read'))
+        self.assertFalse(unrelated.order_line.with_user(reviewer).has_access('read'))
+        self.assertEqual(self.env['sale.order'].with_user(reviewer).search([]), reviewed)
+        # Exercise the fields used by the review form, not just the decision RPC.
+        self.assertTrue(approval.with_user(reviewer).read([
+            'order_id', 'preview_summary', 'can_decide', 'assigned_user_ids', 'workflow_state']))
+        for model in (reviewed, reviewed.order_line):
+            for operation in ('write', 'create', 'unlink'):
+                self.assertFalse(model.has_access(operation), (model._name, operation))
+        for action in (lambda: reviewed.write({'client_order_ref': 'Not permitted'}),
+                       lambda: reviewed.order_line.write({'price_unit': 1}),
+                       reviewed.action_revise_quotation, reviewed.action_confirm,
+                       reviewed.action_quotation_send, lambda: reviewed.write({'state': 'cancel'})):
+            with self.assertRaises(AccessError):
+                action()
+        self.assertEqual(approval.status, 'pending')
+        with self.assertRaises(AccessError):
+            approval.with_user(reviewer).read(['financial_snapshot'])
+        reviewed.action_approve_current()
+        self.assertEqual(approval.status, 'approved')
+        self.assertEqual(approval.decided_by, reviewer)
+
+    def test_review_only_request_changes_and_assignee_checks(self):
+        order = self.quote((1,))
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        unrelated = self.quote((10,))
+        unrelated.action_submit_approvals()
+        foreign_approval = unrelated.sudo().approval_ids
+        with self.assertRaises(AccessError):
+            foreign_approval.with_user(self.sm).read(['status'])
+        with self.assertRaises(AccessError):
+            foreign_approval.with_user(self.sm).action_approve()
+        self.assertEqual(self.env['mobikey.sale.approval'].with_user(self.sm).search([]), approval)
+        action = approval.with_user(self.sm).action_request_changes()
+        wizard = self.env['mobikey.sale.approval.request.changes'].with_user(self.sm).with_context(
+            action['context']).create({'reason': 'Please revise the payment schedule.'})
+        wizard.action_confirm()
+        self.assertEqual(approval.status, 'rejected')
+        self.assertEqual(approval.decided_by, self.sm)
+        self.assertEqual(approval.change_request, 'Please revise the payment schedule.')
+        with self.assertRaises(UserError):
+            approval.with_user(self.sm).action_approve()
+
+    def test_sales_and_review_permissions_remain_independent(self):
+        self.sm.group_ids = [Command.link(self.env.ref('sales_team.group_sale_salesman').id)]
+        own = self.quote()
+        own.sudo().user_id = self.sm
+        own.with_user(self.sm).write({'client_order_ref': 'My quotation'})
+        reviewed = self.quote((1,))
+        reviewed.action_submit_approvals()
+        self.assertTrue(reviewed.with_user(self.sm).has_access('read'))
+        self.assertFalse(reviewed.with_user(self.sm).has_access('write'))
+        self.assertFalse(reviewed.order_line.with_user(self.sm).has_access('write'))
+        reviewed.with_user(self.sm).action_approve_current()
+        self.assertEqual(reviewed.approval_status, 'ready')
+
+    def test_review_only_company_boundary_and_revoked_membership(self):
+        order = self.quote((1,))
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        other = self.env['res.company'].create({'name': 'Other review company'})
+        self.sm.company_ids = [Command.link(other.id)]
+        restricted = self.sm.with_context(allowed_company_ids=other.ids)
+        for record in (order, approval):
+            with self.assertRaises(AccessError):
+                record.with_user(restricted).with_context(allowed_company_ids=other.ids).read(['id'])
+        with self.assertRaises(AccessError):
+            order.with_user(self.sm).with_context(allowed_company_ids=other.ids).action_approve_current()
+        with self.assertRaises(AccessError):
+            approval.with_user(self.sm).with_context(allowed_company_ids=other.ids).action_approve()
+        self.sm.group_ids = [Command.set(self.env.ref('base.group_user').ids)]
+        with self.assertRaises(AccessError):
+            approval.with_user(self.sm).action_approve()
+        self.assertEqual(approval.status, 'pending')
+
+    def test_removing_inherited_sales_keeps_explicit_sales_memberships(self):
+        group = self.env.ref('mobikey_sale_approvals.group_approver')
+        sales_group = self.env.ref('sales_team.group_sale_salesman')
+        # Reproduce the previous version's implication, then its XML upgrade.
+        group.implied_ids = [Command.link(sales_group.id)]
+        self.assertTrue(self.finance.has_group('sales_team.group_sale_salesman'))
+        self.sm.group_ids = [Command.link(sales_group.id)]
+        group.implied_ids = [Command.unlink(sales_group.id)]
+        self.assertFalse(self.finance.has_group('sales_team.group_sale_salesman'))
+        self.assertTrue(self.sm.has_group('sales_team.group_sale_salesman'))
+        self.assertTrue(self.finance.has_group('mobikey_sale_approvals.group_approver'))
+
+    def test_approver_menu_is_available_without_sales(self):
+        visible = self.env['ir.ui.menu'].with_user(self.finance)._visible_menu_ids()
+        self.assertIn(self.env.ref('mobikey_sale_approvals.approval_root').id, visible)
+        self.assertIn(self.env.ref('mobikey_sale_approvals.approval_inbox').id, visible)
+
+    def test_empty_named_pools_never_route_to_legacy_roles(self):
+        company = self.env.company
+        company.write({field: [Command.clear()] for field in (
+            'mobikey_sm_ids', 'mobikey_gm_ids', 'mobikey_hq_ids', 'mobikey_finance_ids',
+            'mobikey_trade_in_approver_ids')})
+        for role in ('sm', 'gm', 'hq', 'finance', 'trade_in_pool', 'gm|hq'):
+            self.assertFalse(company._mobikey_approvers(role), role)
+        term = self.env['account.payment.term'].create({'name': 'Named finance required', 'financing_required': True})
+        for order in (self.quote((1,)), self.quote((3,)), self.quote((10,)),
+                      self.quote(payment_term_id=term.id)):
+            with self.assertRaisesRegex(UserError, 'Configure named approvers'):
+                order.action_submit_approvals()
+            self.assertFalse(order.approval_submitted)
+            self.assertFalse(order.sudo().approval_ids)
+
+    def test_named_authorities_do_not_require_legacy_roles(self):
+        reviewer = new_test_user(self.env, login='workflow.named.only', groups='base.group_user')
+        for key in ('sm', 'gm', 'hq', 'finance'):
+            self.env.company[f'mobikey_{key}_ids'] = [Command.set(reviewer.ids)]
+            self.assertEqual(self.env.company._mobikey_approvers(key), reviewer)
+        self.assertEqual(self.env.company._mobikey_approvers('gm|hq'), reviewer)
+        self.assertFalse(reviewer.has_group('mobikey_sale_approvals.group_financial_visibility'))
+        reviewer.group_ids = [Command.set(self.env.ref('base.group_user').ids)]
+        self.assertFalse(self.env.company._mobikey_approvers('finance'))
+
+    def test_pending_decision_survives_clearing_the_named_matrix(self):
+        order = self.quote((1,))
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        original_snapshot = approval.financial_snapshot
+        self.env.company.mobikey_sm_ids = [Command.clear()]
+        self.assertFalse(self.env.company._mobikey_approvers('sm'))
+        self.assertEqual(approval.assigned_user_ids, self.sm)
+        approval.with_user(self.sm).action_approve()
+        self.assertEqual(approval.status, 'approved')
+        self.assertEqual(approval.financial_snapshot, original_snapshot)
+
+    def test_commission_waits_for_named_gm_or_hq(self):
+        self.env.company.write({'mobikey_commission_milestone': 'confirmation',
+            'mobikey_gm_ids': [Command.clear()], 'mobikey_hq_ids': [Command.clear()]})
+        order = self.quote()
+        order.action_confirm()
+        self.assertFalse(order.sudo().approval_ids.filtered(lambda a: a.category == 'commission'))
+        reviewer = new_test_user(self.env, login='workflow.named.commission', groups='base.group_user')
+        self.env.company.mobikey_hq_ids = [Command.set(reviewer.ids)]
+        order._ensure_commission_approval()
+        approval = order.sudo().approval_ids.filtered(lambda a: a.category == 'commission')
+        self.assertEqual(approval.assigned_user_ids, reviewer)
+        order._ensure_commission_approval()
+        self.assertEqual(len(order.sudo().approval_ids.filtered(lambda a: a.category == 'commission')), 1)
+        approval.with_user(reviewer).action_approve()
+        self.assertEqual(approval.status, 'approved')
+
+    def test_legacy_approval_selectors_are_retired(self):
+        hierarchy = self.env['res.groups']._get_view_group_hierarchy()
+        for suffix in ('crm', 'finance'):
+            privilege = self.env.ref(f'mobikey_crm.res_groups_{suffix}_approval_privilege')
+            self.assertFalse(privilege.group_ids)
+            self.assertFalse(hierarchy['privileges'][privilege.id]['group_ids'])
+            for category in hierarchy['categories']:
+                self.assertNotIn(privilege.id, category['privilege_ids'])
+        # Existing technical membership still supports submitted decisions and costs.
+        self.assertTrue(self.finance.has_group('mobikey_sale_approvals.group_approver'))
+        self.assertTrue(self.finance.has_group('mobikey_sale_approvals.group_financial_visibility'))
