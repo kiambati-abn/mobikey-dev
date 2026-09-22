@@ -8,3 +8,4 @@ from . import crm_lead
 from . import reporting
 from . import issue_controls
 from . import deal_type
+from . import invoice_controls

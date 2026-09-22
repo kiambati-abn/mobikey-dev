@@ -187,9 +187,10 @@ class SaleApproval(models.Model):
                     or user not in approval._eligible_assigned_users()):
                 raise AccessError(_('You are not an assigned eligible approver for this company.'))
             order = approval.order_id
-            if approval.status != 'pending' or approval.revision != order.approval_revision:
+            if (approval.status != 'pending' or not approval.notified_at
+                    or approval.revision != order.approval_revision):
                 raise UserError(_('This approval is no longer pending for the current revision.'))
-            if approval.category == 'commission' and not order._commission_eligible():
+            if approval.category == 'commission' and not order.sudo()._commission_eligible():
                 raise UserError(_('The order no longer meets the commission eligibility milestone.'))
             if approval.category != 'commission':
                 if not order.approval_submitted or order.sudo().approval_fingerprint != order._commercial_fingerprint():
@@ -225,7 +226,10 @@ class SaleApproval(models.Model):
         return self._decide('rejected')
 
     def _decide(self, decision):
-        self.mapped('order_id')._lock_approval()
+        # Reviewers can decide without permission to edit commercial terms.
+        # Authorize before locking and recheck after the lock for stale decisions.
+        self._check_decision_authority()
+        self.mapped('order_id')._lock_approval(operation='read')
         self.invalidate_recordset()
         self._check_decision_authority()
         for approval in self:

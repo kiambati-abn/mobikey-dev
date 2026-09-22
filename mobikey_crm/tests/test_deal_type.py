@@ -1,9 +1,73 @@
 from odoo.exceptions import AccessError, ValidationError
-from odoo.tests import TransactionCase, new_test_user, tagged
+from lxml import etree
+from odoo.tests import Form, TransactionCase, new_test_user, tagged
 
 
 @tagged('post_install', '-at_install')
 class TestDealType(TransactionCase):
+    def test_opportunity_lookup_edit_search_and_financing(self):
+        user = new_test_user(self.env, login='deal.lookup.sales', groups='sales_team.group_sale_salesman')
+        cash = self.env.ref('mobikey_crm.deal_type_cash')
+        financing = self.env.ref('mobikey_crm.deal_type_financing')
+        lead = self.env['crm.lead'].with_user(user).create({
+            'name': 'Editable opportunity', 'type': 'opportunity', 'deal_type': 'cash',
+        })
+        self.assertEqual(lead.deal_type_id, cash)
+        with Form(lead) as form:
+            form.deal_type_id = financing
+            self.assertTrue(form.financing_required)
+        lead.invalidate_recordset()
+        self.assertEqual(lead.deal_type, 'financing')
+        self.assertEqual(lead.deal_type_id, financing)
+        self.assertTrue(lead.financing_required)
+        self.assertEqual(lead._prepare_opportunity_quotation_context()['default_deal_type'], 'financing')
+        self.assertIn(financing.id, [item[0] for item in self.env['mobikey.deal.type'].with_user(user).name_search('Financ')])
+
+        # A native many2one supplies Search More and checks the catalogue ACLs
+        # for Create and Edit. Quick-create is disabled because code is required.
+        arch = etree.fromstring(lead.get_view(view_type='form')['arch'])
+        field = arch.xpath('//field[@name="deal_type_id"]')[0]
+        self.assertNotEqual(field.get('readonly'), '1')
+        self.assertEqual(field.get('can_create'), 'False')
+        self.assertEqual(field.get('can_write'), 'False')
+
+    def test_manager_can_add_option_and_select_it_on_opportunity(self):
+        manager = new_test_user(self.env, login='deal.lookup.manager', groups='sales_team.group_sale_manager')
+        with Form(self.env['mobikey.deal.type'].with_user(manager)) as option_form:
+            option_form.name = 'Corporate leasing'
+            option_form.code = 'corporate_leasing'
+        option = option_form.record
+        lead = self.env['crm.lead'].with_user(manager).create({'name': 'Corporate', 'type': 'opportunity'})
+        with Form(lead) as form:
+            form.deal_type_id = option
+        self.assertEqual(lead.deal_type, 'corporate_leasing')
+        self.assertEqual(lead.deal_type_id, option)
+        arch = etree.fromstring(lead.get_view(view_type='form')['arch'])
+        field = arch.xpath('//field[@name="deal_type_id"]')[0]
+        self.assertEqual(field.get('can_create'), 'True')
+        self.assertEqual(field.get('can_write'), 'True')
+
+    def test_lookup_api_and_legacy_values_stay_synchronized(self):
+        cash = self.env.ref('mobikey_crm.deal_type_cash')
+        fleet = self.env.ref('mobikey_crm.deal_type_fleet')
+        financing = self.env.ref('mobikey_crm.deal_type_financing')
+        lead = self.env['crm.lead'].create({'name': 'Lookup import', 'deal_type_id': financing.id})
+        self.assertEqual(lead.deal_type, 'financing')
+        self.assertTrue(lead.financing_required)
+        lead.write({'deal_type': 'fleet'})
+        self.assertEqual(lead.deal_type_id, fleet)
+        lead.write({'deal_type_id': cash.id})
+        self.assertEqual(lead.deal_type, 'cash')
+        copied = lead.copy()
+        self.assertEqual(copied.deal_type_id, cash)
+        lead.write({'deal_type_id': False})
+        self.assertFalse(lead.deal_type)
+        self.assertFalse(lead.deal_type_id)
+        with self.assertRaises(ValidationError):
+            lead.write({'deal_type': 'cash', 'deal_type_id': financing.id})
+        with self.assertRaises(ValidationError):
+            lead.write({'deal_type_id': 2147483647})
+
     def test_configurable_options_preserve_wire_values(self):
         manager = new_test_user(self.env, login='deal.manager', groups='sales_team.group_sale_manager')
         user = new_test_user(self.env, login='deal.sales', groups='sales_team.group_sale_salesman')

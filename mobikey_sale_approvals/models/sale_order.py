@@ -62,6 +62,15 @@ class SaleOrder(models.Model):
     legacy_confirmed_order = fields.Boolean(copy=False, readonly=True,
         help='Order was already confirmed at cutover. Historical commitment; no new approval is inferred.')
 
+    @api.model
+    def get_view(self, view_id=None, view_type='form', **options):
+        user = self.env.user
+        if (view_type == 'form' and user.has_group('mobikey_sale_approvals.group_approver')
+                and not user.has_group('sales_team.group_sale_salesman')
+                and not user.has_group('base.group_system')):
+            view_id = self.env.ref('mobikey_sale_approvals.order_review_form').id
+        return super().get_view(view_id=view_id, view_type=view_type, **options)
+
     @api.depends('approval_ids')
     def _compute_approval_count(self):
         for order in self:
@@ -89,11 +98,12 @@ class SaleOrder(models.Model):
 
     def _my_actionable_approvals(self):
         self.ensure_one()
+        self.check_access('read')
         user = self.env.user
         return self._current_approvals().filtered(
             lambda approval: approval.status == 'pending' and approval.notified_at
             and user in approval._eligible_assigned_users()
-        )
+        ).with_env(self.env)
 
     @api.depends_context('uid')
     @api.depends('approval_ids.status', 'approval_ids.notified_at',
@@ -152,8 +162,8 @@ class SaleOrder(models.Model):
                                           'vehicle_source': old_line.sudo().vehicle_source})
         return copies
 
-    def _lock_approval(self):
-        self.check_access('write')
+    def _lock_approval(self, operation='write'):
+        self.check_access(operation)
         self.env.cr.execute('SELECT id FROM sale_order WHERE id IN %s ORDER BY id FOR UPDATE',
                             [tuple(self.ids)])
         self.invalidate_recordset()
@@ -362,7 +372,11 @@ class SaleOrder(models.Model):
                         'to %(company)s.',
                         company=order.company_id.display_name,
                     ))
-                raise UserError(_('Configure eligible company approvers for: %s', ', '.join(missing)))
+                raise UserError(_(
+                    'Configure named approvers under Company → Sales approvals for %(company)s '
+                    'before submitting these approvals: %(categories)s. Legacy user roles are not used.',
+                    company=order.company_id.display_name, categories=', '.join(missing),
+                ))
             super(SaleOrder, order.sudo()).write({'approval_submitted': True,
                 'approval_policy_snapshot': policy,
                 'approval_date_order': order.date_order,
@@ -460,6 +474,7 @@ class SaleOrder(models.Model):
         return self.env.su and self.env.context.get('install_demo')
 
     def action_quotation_send(self):
+        self.check_access('write')
         self._check_commercial_approval(issue=True)
         return super().action_quotation_send()
 
@@ -540,6 +555,7 @@ class SaleOrder(models.Model):
         return orders
 
     def write(self, vals):
+        self.check_access('write')
         if self._is_trusted_demo_load():
             return super().write(vals)
         if CONTROLLED.intersection(vals) and not self.env.su:
@@ -584,6 +600,15 @@ class SaleOrder(models.Model):
 
 class SaleOrderLine(models.Model):
     _inherit = 'sale.order.line'
+
+    @api.model
+    def get_view(self, view_id=None, view_type='form', **options):
+        user = self.env.user
+        if (view_type == 'form' and user.has_group('mobikey_sale_approvals.group_approver')
+                and not user.has_group('sales_team.group_sale_salesman')
+                and not user.has_group('base.group_system')):
+            view_id = self.env.ref('mobikey_sale_approvals.order_line_review_form').id
+        return super().get_view(view_id=view_id, view_type=view_type, **options)
     reconditioning_cost = fields.Monetary(groups=FINANCIAL, copy=False,
         help='Total additional cost for this line, allocated once (not per unit).')
     target_margin_snapshot = fields.Float(compute='_compute_target_margin_snapshot', store=True,

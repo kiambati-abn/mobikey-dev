@@ -176,10 +176,43 @@ class CrmLead(models.Model):
         selection=lambda self: self.env['mobikey.deal.type']._selection(),
         string="Deal Type",
     )
+    deal_type_id = fields.Many2one(
+        'mobikey.deal.type', string='Configured Deal Type',
+        compute='_compute_deal_type_id', inverse='_inverse_deal_type_id',
+        help='Search configured Deal Types. CRM managers can add or edit options.',
+    )
+
+    @api.depends('deal_type')
+    def _compute_deal_type_id(self):
+        options = self.env['mobikey.deal.type'].search([
+            ('code', 'in', [code for code in self.mapped('deal_type') if code]),
+        ])
+        by_code = {option.code: option for option in options}
+        for lead in self:
+            lead.deal_type_id = by_code.get(lead.deal_type, False)
+
+    def _inverse_deal_type_id(self):
+        for lead in self:
+            lead.deal_type = lead.deal_type_id.code
+
+    @api.onchange('deal_type_id')
+    def _onchange_deal_type_id(self):
+        self.deal_type = self.deal_type_id.code
+        self._onchange_mobikey_deal_type()
 
     def _mobikey_financing_values(self, vals, creating=False):
         self.ensure_one()
         values = dict(vals)
+        if 'deal_type_id' in values:
+            option = self.env['mobikey.deal.type'].browse(values.pop('deal_type_id')).exists()
+            if vals['deal_type_id'] and not option:
+                raise ValidationError(_('Select an existing Deal Type.'))
+            code = option.code or False
+            if 'deal_type' in values and values['deal_type'] != code:
+                raise ValidationError(_('Deal Type and its integration code must match.'))
+            # Keep the original code as the single source of truth for imports,
+            # quotation defaults and existing commercial approval snapshots.
+            values['deal_type'] = code
         policy_changed = creating or bool({'deal_type', 'financing_required'} & values.keys())
         if not policy_changed:
             return values

@@ -43,20 +43,19 @@ class Company(models.Model):
     mobikey_sm_ids = fields.Many2many(
         'res.users', 'mobikey_company_sm_rel', string='Assigned Sales Managers',
         domain="[('share', '=', False), ('company_ids', 'in', [id])]",
-        help='Named approvers take precedence. Leave empty to use eligible Sales Manager users.')
+        help='Only these named users can receive new approvals for this authority. Configure at least one before a quotation requires this approval.')
     mobikey_gm_ids = fields.Many2many(
         'res.users', 'mobikey_company_gm_rel', string='Assigned Country GMs',
         domain="[('share', '=', False), ('company_ids', 'in', [id])]",
-        help='Named approvers take precedence. Leave empty to use eligible Country GM users.')
+        help='Only these named users can receive new approvals for this authority. Configure at least one before a quotation requires this approval.')
     mobikey_hq_ids = fields.Many2many(
         'res.users', 'mobikey_company_hq_rel', string='Assigned HQ approvers',
         domain="[('share', '=', False), ('company_ids', 'in', [id])]",
-        help='Named approvers take precedence. Leave empty to use eligible HQ users.')
+        help='Only these named users can receive new approvals for this authority. Configure at least one before a quotation requires this approval.')
     mobikey_finance_ids = fields.Many2many(
         'res.users', 'mobikey_company_finance_rel', string='Assigned Finance approvers',
         domain="[('share', '=', False), ('company_ids', 'in', [id])]",
-        help='Named approvers take precedence and do not need the Finance access role. '
-             'Leave empty to use eligible Finance users.')
+        help='Only these named users receive new financing approvals. Legacy Finance roles do not route approvals. Configure at least one before submitting a financed quotation.')
 
     @api.constrains('mobikey_sm_discount_limit', 'mobikey_gm_discount_limit',
                     'mobikey_minimum_margin')
@@ -114,32 +113,21 @@ class Company(models.Model):
         self.ensure_one()
         return users.filtered(
             lambda user: user.active and not user.share and self in user.company_ids
+            and user.has_group('mobikey_sale_approvals.group_approver')
         )
 
     def _mobikey_approvers(self, role):
+        """Route new requests only through this company's explicit assignments."""
         self.ensure_one()
-        if role == 'trade_in_pool':
-            return self._eligible_internal_approvers(
-                self.sudo().mobikey_trade_in_approver_ids
-            )
-        roles = role.split('|')
-        users = self.env['res.users']
-        groups = {
-            'sm': 'mobikey_crm.group_mobikey_sales_manager',
-            'gm': 'mobikey_crm.group_mobikey_country_gm',
-            'hq': 'mobikey_crm.group_mobikey_hq',
-            'finance': 'mobikey_crm.group_mobikey_finance',
+        assignment_fields = {
+            'sm': 'mobikey_sm_ids',
+            'gm': 'mobikey_gm_ids',
+            'hq': 'mobikey_hq_ids',
+            'finance': 'mobikey_finance_ids',
+            'trade_in_pool': 'mobikey_trade_in_approver_ids',
         }
-        for key in roles:
-            assigned = self.sudo().with_context(active_test=False)[f'mobikey_{key}_ids']
-            if assigned:
-                users |= self._eligible_internal_approvers(assigned)
-                continue
-            role_group = self.env.ref(groups[key])
-            users |= self.env['res.users'].sudo().search([
-                ('group_ids', 'in', [role_group.id]),
-                ('active', '=', True),
-                ('share', '=', False),
-                ('company_ids', 'in', [self.id]),
-            ])
-        return users
+        company = self.sudo().with_context(active_test=False)
+        users = company.env['res.users']
+        for key in role.split('|'):
+            users |= company[assignment_fields[key]]
+        return self._eligible_internal_approvers(users)
