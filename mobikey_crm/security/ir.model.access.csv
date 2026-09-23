@@ -19,3 +19,6 @@ access_mobikey_deal_type_admin,Deal type administrators,model_mobikey_deal_type,
 access_mobikey_crm_line_admin,CRM product line administrators,model_crm_product_lines,base.group_system,1,1,1,1
 access_mobikey_crm_admin,CRM administrators,crm.model_crm_lead,base.group_system,1,1,1,1
 access_mobikey_crm_activity_admin,CRM activity administrators,crm.model_crm_activity_report,base.group_system,1,0,0,0
+access_mobikey_branch_user,Branch readers,model_mobikey_branch,base.group_user,1,0,0,0
+access_mobikey_branch_manager,Branch managers,model_mobikey_branch,sales_team.group_sale_manager,1,1,1,1
+access_mobikey_branch_admin,Branch administrators,model_mobikey_branch,base.group_system,1,1,1,1

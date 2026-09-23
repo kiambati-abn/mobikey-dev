@@ -22,7 +22,7 @@ Approval notifications use explicit internal recipients and each user's Odoo not
 
 Deal Type and Financing Required are visible on opportunities and quotations. Selecting Financing enables Financing Required; Fleet and Lease may also retain financing. Payment Terms are maintained only on quotations because one opportunity can have several offers with different terms. When financing is required, only payment terms marked **Financing Required** are valid. A financing-enabled quotation term updates the linked opportunity, and payment terms remain the approval trigger.
 
-The Qualification tab records the accessible company or branch where the customer walked in. Preferred Languages are configurable under **CRM → Configuration → Preferred Languages** and can also be added from the qualification field.
+The Qualification tab records a configurable Branch where the customer walked in. Sales managers maintain names, company assignments and archived options under **CRM → Configuration → Branches**. This does not change the accounting company. The CRM upgrade preserves historical walk-in mappings. Preferred Languages are configurable under **CRM → Configuration → Preferred Languages** and can also be added from the qualification field.
 
 ## Coordinated installation / upgrade
 
@@ -52,3 +52,35 @@ The full local suite must pass before deployment. See the [validation record](/h
 ## Remaining live-data work
 
 Staging access and final policy choices are still required. Source-catalogue normalisation, detailed historical data repair, role-specific dashboard layouts, performance measurements on production-sized data, profitability artifact review, and predictive scoring calibration depend on that data. Native reports and the new snapshot/approval reporting provide the implementation foundation; this release does not claim historical reconstruction or predictive-model validation.
+
+
+## Branch and approval navigation hotfix (2026-09-23)
+
+Upgrade `mobikey_crm` to **19.0.2.6.1** and `mobikey_sale_approvals` to
+**19.0.1.8.1** together. Restart Odoo and upgrade both modules; copying files alone
+does not apply the new model, permissions, views or legacy branch migration.
+
+- **Sales → Orders → Quotation Approvals** opens My pending decisions. Remove
+  that filter for all accessible history, then select Approved, Changes requested,
+  Pending or Withdrawn. Existing company and assignment permissions still apply.
+- The standalone Quotation Approvals launcher is retired; its external IDs remain
+  for safe upgrades. Approver-only users can reach their assigned decisions in Sales.
+- **Sales → Reporting → Approvals** shows decision counts by type and status,
+  plus average turnaround. Reporting is available to Sales managers and respects
+  existing record rules. Counts are decisions, not distinct quotations.
+- Turnaround is elapsed calendar hours from request to decision, including queued
+  time. The average excludes pending and withdrawn records and missing decision
+  timestamps; a genuine zero-hour decision is included. Requested date and Decision
+  date filters select the reporting period. Withdrawing a revision retains its
+  history under Withdrawn, outside current approved counts and turnaround averages.
+- Branches can be archived without removing them from historical leads. The upgrade
+  maps old company-based and stock-location-based walk-in assignments, including
+  archived leads, without clearing the legacy fields.
+
+Validation: the isolated Odoo 19 CRM/approvals run on 2026-09-23 completed
+**87 tests with zero failures and zero errors**, including legacy branch migration,
+branch permissions and archival, approver-only Sales navigation, history access,
+and turnaround averages with pending, withdrawn and zero-hour decisions.
+Log: `/home/ocean/.local/share/odoo-lab/projects/mobikey-crm-workflow-35e0a232/logs/test-20260923-130315.log`.
+Python/XML parsing and `git diff --check` also passed. This is local validation;
+production deployment and a full production-database upgrade have not been run.
