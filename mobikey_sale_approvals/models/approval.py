@@ -1,6 +1,7 @@
 from markupsafe import Markup
 from odoo import api, fields, models, _
 from odoo.exceptions import AccessError, UserError
+from odoo.tools import SQL
 from .security import FINANCIAL
 
 
@@ -37,7 +38,10 @@ class SaleApproval(models.Model):
     decided_by = fields.Many2one('res.users')
     decided_at = fields.Datetime()
     deadline = fields.Date()
-    turnaround_hours = fields.Float(compute='_compute_turnaround', store=True)
+    turnaround_hours = fields.Float(
+        string='Average turnaround (hours)', compute='_compute_turnaround', store=True,
+        aggregator='avg', help='Elapsed hours from request to decision, including queued time. '
+        'Reporting averages include approved and changes-requested decisions only.')
     can_decide = fields.Boolean(compute='_compute_can_decide')
     workflow_state = fields.Selection([
         ('queued', 'Queued'), ('active', 'Awaiting decision'), ('approved', 'Approved'),
@@ -53,6 +57,16 @@ class SaleApproval(models.Model):
 
     _revision_category_unique = models.Constraint('UNIQUE(order_id, revision, category)',
         'Only one decision per quotation revision and category is allowed.')
+
+    def _read_group_select(self, aggregate_spec, query):
+        expression = super()._read_group_select(aggregate_spec, query)
+        if aggregate_spec == 'turnaround_hours:avg':
+            # Pending rows store zero; exclude them and withdrawn revisions without
+            # excluding genuine zero-hour decisions or changing record-rule scope.
+            return SQL("%s FILTER (WHERE %s IN ('approved', 'rejected') AND %s IS NOT NULL)",
+                       expression, self._field_to_sql(self._table, 'status', query),
+                       self._field_to_sql(self._table, 'decided_at', query))
+        return expression
 
     @api.depends('requested_at', 'decided_at')
     def _compute_turnaround(self):

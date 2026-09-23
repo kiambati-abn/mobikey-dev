@@ -110,6 +110,11 @@ class CrmLead(models.Model):
 
     referral_name = fields.Char(string="Referral Name")
 
+    branch_id = fields.Many2one(
+        'mobikey.branch', string="Branch", tracking=True, ondelete='restrict',
+        help="Customer walk-in or sales location; does not change the accounting company.",
+    )
+
     walkin_location = fields.Many2one(
         comodel_name="stock.location",
         string="Legacy Walk-in Location",

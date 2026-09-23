@@ -1,4 +1,6 @@
-from odoo import Command
+from datetime import timedelta
+
+from odoo import Command, fields
 from odoo.exceptions import AccessError, UserError, ValidationError
 from odoo.modules.loading import force_demo
 from odoo.tests import Form, TransactionCase, tagged, new_test_user
@@ -806,8 +808,13 @@ class TestQuotationWorkflow(TransactionCase):
 
     def test_approver_menu_is_available_without_sales(self):
         visible = self.env['ir.ui.menu'].with_user(self.finance)._visible_menu_ids()
-        self.assertIn(self.env.ref('mobikey_sale_approvals.approval_root').id, visible)
-        self.assertIn(self.env.ref('mobikey_sale_approvals.approval_inbox').id, visible)
+        self.assertFalse(self.finance.has_group('sales_team.group_sale_salesman'))
+        self.assertIn(self.env.ref('sale.sale_menu_root').id, visible)
+        self.assertIn(self.env.ref('sale.sale_order_menu').id, visible)
+        self.assertIn(self.env.ref('mobikey_sale_approvals.approval_menu').id, visible)
+        self.assertNotIn(self.env.ref('mobikey_sale_approvals.approval_root').id, visible)
+        self.assertNotIn(self.env.ref('mobikey_sale_approvals.approval_inbox').id, visible)
+        self.assertNotIn(self.env.ref('sale.menu_sale_order').id, visible)
 
     def test_empty_named_pools_never_route_to_legacy_roles(self):
         company = self.env.company
@@ -873,3 +880,32 @@ class TestQuotationWorkflow(TransactionCase):
         # Existing technical membership still supports submitted decisions and costs.
         self.assertTrue(self.finance.has_group('mobikey_sale_approvals.group_approver'))
         self.assertTrue(self.finance.has_group('mobikey_sale_approvals.group_financial_visibility'))
+
+    def test_approval_history_and_turnaround_exclude_unfinished_decisions(self):
+        order = self.quote((1,))
+        order.action_submit_approvals()
+        approval = order.sudo().approval_ids
+        now = fields.Datetime.now()
+        approval.with_user(self.sm).action_approve()
+        approval.write({'requested_at': now - timedelta(hours=4), 'decided_at': now})
+        pending_order = self.quote((1,))
+        pending_order.action_submit_approvals()
+        pending = pending_order.sudo().approval_ids
+        rejected = approval.copy({'order_id': self.quote((1,)).id, 'status': 'rejected',
+                                  'requested_at': now, 'decided_at': now})
+        withdrawn = approval.copy({'order_id': self.quote((1,)).id, 'status': 'withdrawn',
+                                   'requested_at': now - timedelta(hours=100), 'decided_at': now})
+        records = approval | pending | rejected | withdrawn
+        count, average = self.env['mobikey.sale.approval'].with_user(self.sm)._read_group(
+            [('id', 'in', records.ids)], [], ['__count', 'turnaround_hours:avg'])[0]
+        self.assertEqual(count, 4)
+        self.assertAlmostEqual(average, 2.0)
+        action = self.env.ref('mobikey_sale_approvals.approval_action')
+        self.assertEqual(action.domain, '[]')
+        history = self.env['mobikey.sale.approval'].with_user(self.sm).search([
+            ('id', 'in', records.ids), ('status', '=', 'approved')])
+        self.assertEqual(history, approval)
+        outsider = new_test_user(self.env, login='approval.outsider',
+                                groups='mobikey_sale_approvals.group_approver')
+        self.assertFalse(self.env['mobikey.sale.approval'].with_user(outsider).search([
+            ('id', 'in', records.ids)]))
