@@ -29,6 +29,23 @@ class SaleOrder(models.Model):
         help='When enabled, only payment terms configured as Financing Required can be used.',
     )
 
+    def action_open_opportunity(self):
+        """Open the opportunity this quotation was created from or linked to."""
+        self.ensure_one()
+        lead = self.opportunity_id
+        if not lead:
+            return False
+        lead.check_access('read')
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Opportunity'),
+            'res_model': 'crm.lead',
+            'res_id': lead.id,
+            'view_mode': 'form',
+            'views': [(False, 'form')],
+            'target': 'current',
+        }
+
     def _mobikey_financing_values(self, vals, creating=False):
         self.ensure_one()
         values = dict(vals)

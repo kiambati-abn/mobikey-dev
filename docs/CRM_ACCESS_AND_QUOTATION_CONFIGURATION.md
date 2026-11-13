@@ -10,9 +10,16 @@ Open **CRM → Configuration → CRM Access Policies** as an administrator. Mode
 |---|---|---|
 | Salesperson | Assigned records, including explicit assignments across teams | Existing Odoo model permission; ordinary salespeople cannot delete leads |
 | Sales team leader | Assigned records plus every lead/opportunity in teams they lead, including unassigned records | Existing Odoo model permission |
+| View All Opportunities (e.g. Country GM) | Read: all records within enabled companies. Edit, create and reassign: assigned records plus teams led | None from this policy |
 | CRM manager | All records within the companies currently enabled for that user | Existing Odoo model permission |
 | Administrator | All records within enabled companies; fixed recovery access | Existing Odoo model permission |
 | Other internal / portal users | No CRM grant by default | No CRM grant |
+
+### View All Opportunities role
+
+From `mobikey_crm` **19.0.2.7.0**, the user form has **Sales → CRM Visibility → View All Opportunities**. Use it for a Country GM or anyone else who must see every lead and opportunity without **Sales → Administrator** rights (Sales configuration, stages, teams, and editing everyone's records). The role implies the Sales "Own Documents" user group so the CRM menus are available. Its default policy, **View all opportunities**, is a normal `noupdate` access policy that administrators can adjust.
+
+A typical GM setup is **Sales: User: All Documents** (so they also see all quotations) plus **View All Opportunities**. Native **User: All Documents** alone does not widen CRM visibility. Company access still limits the role, so a Kenya-only user sees only Kenya records. No existing user receives the role automatically on upgrade.
 
 The default sales policy uses **Assigned records and teams led**. An ordinary salesperson who leads no teams consequently sees only assigned records. Leadership comes from the native Sales Team's Team Leader field. Being a named quotation approver or holding a legacy approval group is not the same as being a CRM manager or a team leader.
 

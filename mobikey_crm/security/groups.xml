@@ -42,5 +42,21 @@
             <field name="privilege_id" eval="False"/>
         </record>
 
+        <!-- Read-wide CRM visibility for country GMs and similar roles without
+             Sales Administrator configuration rights. The matching access policy
+             (data/access_policy_and_deal_types.xml) defines the record scopes. -->
+        <record model="res.groups.privilege" id="res_groups_crm_visibility_privilege">
+            <field name="name">CRM Visibility</field>
+            <field name="sequence">2</field>
+            <field name="category_id" ref="base.module_category_sales"/>
+            <field name="description">View every lead and opportunity in the user's allowed companies without Sales Administrator rights.</field>
+        </record>
+        <record id="group_crm_view_all" model="res.groups">
+            <field name="name">View All Opportunities</field>
+            <field name="privilege_id" ref="res_groups_crm_visibility_privilege"/>
+            <field name="implied_ids" eval="[(4, ref('sales_team.group_sale_salesman'))]"/>
+            <field name="comment">Sees all leads and opportunities in the allowed companies. Edits, creation and reassignment stay limited to assigned records and teams led; no deletion.</field>
+        </record>
+
     </data>
 </odoo>

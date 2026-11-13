@@ -38,4 +38,13 @@
         <field name="unlink_scope">all</field>
         <field name="reassign_scope">all</field>
     </record>
+    <record id="crm_policy_view_all" model="mobikey.crm.access.policy">
+        <field name="name">View all opportunities</field>
+        <field name="group_id" ref="group_crm_view_all" />
+        <field name="read_scope">all</field>
+        <field name="write_scope">led</field>
+        <field name="create_scope">led</field>
+        <field name="unlink_scope">none</field>
+        <field name="reassign_scope">led</field>
+    </record>
 </odoo>
